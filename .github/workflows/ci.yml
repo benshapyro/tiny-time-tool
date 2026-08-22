@@ -56,6 +56,12 @@ jobs:
       - name: Check zero-network source scan
         run: node scripts/check-zero-network.mjs
 
+      # Browser-safety: a Node built-in imported into the frontend bundle
+      # aborts the module graph at runtime while `vite build` still exits 0.
+      # S2 shipped exactly that (`node:crypto`) past every other gate.
+      - name: Check browser-safe imports
+        run: node scripts/check-browser-safe-imports.mjs
+
       # Unsigned by design (BUILD_SPEC Non-goals: "No code signing in v1").
       # Neither platform has a signing identity configured here, and the
       # Tauri bundler doesn't require one — this must not fail the build.

@@ -14,4 +14,8 @@ export const es: Record<TranslationKey, string> = {
     "No se pudo asignar el atajo de inicio/pausa/reanudar — es posible que otra app ya lo esté usando. Elige otro en Configuración.",
   "shortcuts.warning.stopFailed":
     "No se pudo asignar el atajo para detener — es posible que otra app ya lo esté usando. Elige otro en Configuración.",
+  "panel.inputLabel": "Entrada rápida",
+  "panel.placeholder": "Nombre de la tarea, @cliente, #proyecto",
+  "panel.switchNotice": "Se detendrá: {name} ({elapsed})",
+  "panel.suggestionsLabel": "Sugerencias",
 };

@@ -141,6 +141,61 @@ four would have been silently recorded as "verified" by a harness without these 
 
 Re-run against the real code, all seven go red for their intended reason.
 
+## S4 — quick-entry panel
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 26 | Auto-name uses an **en dash**, per the pinned literal | Swapped the en dash for a hyphen | Yes — `expected 'Aug 21 · 10:00 AM-10:45 AM' to be 'Aug 21 · 10:00 AM–10:45 AM'` | Byte-identical | The fixture is pinned character-for-character |
+| 27 | First `@` token is the **client** | Assigned it to `project` instead | Yes — object mismatch on name/client/project | Byte-identical | |
+| 28 | Later `@` tokens stay **literal in the name** | Removed the already-claimed guard | Yes — `expected … name: 'deep-dive @beta'` | Byte-identical | The spec's anti-Goodhart second fixture |
+| 29 | Autocomplete matches a **prefix**, not a substring | `startsWith` → `includes` | Yes — `expected [ 'Client sync' ] to deeply equal []` | Byte-identical | |
+| 30 | **Browser-safety gate** — no Node built-in reachable from the frontend bundle | Neutered both detectors in `check-browser-safe-imports.mjs` | Yes — 3 of its 5 fixture tests failed | Byte-identical | **New gate. Validated against the real historical defect, not a synthetic one** — see F4 |
+| 31 | Panel window **grows to its content** (no clipped suggestions) | Removed the per-suggestion height term | Yes — `expected 84 to be greater than 84` | Byte-identical | Guards the design-review finding, F5 |
+
+### F4 — a production-breaking bug that passed every gate we had
+
+S2 merged with `import { randomUUID } from "node:crypto"` in `src/timer/timerEngine.ts`.
+`node:crypto` does not exist in a WKWebView, so the import **aborted the entire
+`main.tsx` module graph and neither window rendered**. The shipped app could not draw a
+pixel.
+
+Every gate was structurally blind to it. Vitest and `tsc` resolve `node:` builtins
+happily. `vite build` exited **0**, because Rollup treats an unresolvable builtin as an
+external and merely warns. CI was green on both platforms and produced installers. The
+defect surfaced only because S4 became the first slice whose frontend bundle actually
+imports `TimerEngine` — nothing before it ever executed that file outside a test runner.
+Had S4 not needed it, this ships to the pilot.
+
+Repaired to the Web Crypto `crypto.randomUUID()`, which behaves identically in webview,
+jsdom and Node. Closed permanently by a new deny-by-default gate,
+`scripts/check-browser-safe-imports.mjs`: it fails on any `node:*` or bare-builtin
+import under `src/`, exempting only test files and two **named** test-only drivers, so
+new offenders are refused by absence rather than by a blocklist someone must remember to
+extend. Wired into `npm test` and CI, and it reuses the
+`pathToFileURL(realpathSync(...))` entry guard so it cannot silently no-op on Windows
+the way F1's scripts did.
+
+**Validated against the real bug, not a stand-in:** run against `main`'s actual shipped
+`timerEngine.ts` it reports
+`src/timer/timerEngine.ts: imports a Node built-in — from "node:crypto"` and exits 1;
+against the fixed tree it exits 0.
+
+### F5 — the design review earned its place on its first outing
+
+The S4 screenshots (light and dark, en and es) showed the second autocomplete suggestion
+**sliced in half by the window edge**. The panel was a fixed, non-resizable 480×160 while
+its content — input, optional notice, and a variable list — is taller than that, and the
+list is `overflow: hidden`. Two suggestions already overflowed.
+
+That breaks Design principle 6 ("every state is designed") and would have failed S13b's
+no-clipped-text rule several slices later, in Spanish first, where strings run longer.
+Fixed by sizing the window to its content (`panelHeightFor`, a pure and unit-tested
+function) with the list scrolling past five rows, plus the
+`core:window:allow-set-size` capability and a hand-updated golden fixture.
+
+Worth naming: **no test would ever have caught this.** All 143 tests were green and the
+panel's own component tests passed. It took looking at a picture.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -167,14 +222,16 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1, S2 and S3. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S4. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **25 of 25** (12 in S1, 6 in S2, 7 in S3), every one re-run by the
-  coordinator rather than inherited from an implementer's report.
-- Found broken and repaired: **3** — F1 (both Windows zero-network gates vacuous),
+- Checks verified: **31 of 31** (12 in S1, 6 in S2, 7 in S3, 6 in S4), every one re-run
+  by the coordinator rather than inherited from an implementer's report.
+- Found broken and repaired: **5** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
-  by CI within minutes of the repo going public).
+  by CI within minutes of the repo going public), F4 (`node:crypto` in the frontend
+  bundle — the shipped app could not render, and every existing gate passed it), and
+  F5 (the panel clipped its own suggestion list, found by looking at a screenshot).
 - Drills rejected as invalid before scoring: **6** — two in S2 (a no-op sabotage and one
   red for the wrong reason) and four in S3 (three no-ops plus a comment-only "break"
   that made a real check look unguarded). All redone. Recorded because a drill harness

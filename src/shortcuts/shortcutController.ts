@@ -72,6 +72,16 @@ export interface ShortcutControllerOptions {
   /** Fires on every transition this controller drives, with the resulting
    * tray state and elapsed seconds at that instant. */
   onTrayStateChange?: (state: TrayState, elapsedSeconds: number) => void;
+  /** S4 seam: fires — and is awaited — immediately before a primary-press
+   * pause (running -> paused) takes effect; the engine is still "running"
+   * when this runs. The quick-entry panel wires this to "commit whatever
+   * text is currently typed, if the panel happens to be open" (BUILD_SPEC:
+   * "primary press while the panel is open = commit current text (as
+   * Enter) then pause"). Does nothing on its own if the panel is closed —
+   * that's the callback's job to decide, not this controller's; this seam
+   * only guarantees the ordering (commit fully settles before pause). Not
+   * called on start or resume — only on the running -> paused transition. */
+  onBeforePause?: () => void | Promise<void>;
 }
 
 const MESSAGE_KEY: Record<ShortcutId, TranslationKey> = {
@@ -86,6 +96,7 @@ export class ShortcutController {
   readonly #warnings: Map<ShortcutId, ShortcutWarning>;
   readonly #onPanelOpenRequested?: () => void;
   readonly #onTrayStateChange?: (state: TrayState, elapsedSeconds: number) => void;
+  readonly #onBeforePause?: () => void | Promise<void>;
 
   constructor(options: ShortcutControllerOptions) {
     this.#driver = options.driver;
@@ -97,6 +108,7 @@ export class ShortcutController {
     this.#warnings = new Map();
     this.#onPanelOpenRequested = options.onPanelOpenRequested;
     this.#onTrayStateChange = options.onTrayStateChange;
+    this.#onBeforePause = options.onBeforePause;
   }
 
   /** The accelerator currently assigned to `id` (post-rebind if `rebind()`
@@ -158,6 +170,7 @@ export class ShortcutController {
         return;
       }
       case "running": {
+        await this.#onBeforePause?.();
         await this.#engine.pause();
         const elapsed = await this.#elapsedForCurrentEntry();
         this.#onTrayStateChange?.("paused", elapsed);

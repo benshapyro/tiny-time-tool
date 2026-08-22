@@ -2,6 +2,7 @@
 // state machine, parsing, exports) lands in TS from S2 onward where it's
 // unit-testable without a native harness.
 
+use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 mod os_integration;
@@ -25,6 +26,21 @@ fn migrations() -> Vec<Migration> {
     }]
 }
 
+/// S4: the tray-sync half of `ShortcutController`'s `onTrayStateChange`
+/// seam (business logic in TS, this is plumbing only — same split as every
+/// other slice). `src/app/bootstrap.ts` invokes this on every transition
+/// the controller drives; the tray icon/tooltip/title are the only thing
+/// Rust owns here, per the "pause must be visible, not modal" amendment.
+#[tauri::command]
+fn set_tray_state(
+    app: tauri::AppHandle,
+    state: tray::TrayState,
+    elapsed_seconds: u64,
+) -> Result<(), String> {
+    let tray_icon = app.state::<tauri::tray::TrayIcon<tauri::Wry>>();
+    tray::set_tray_state(&tray_icon, state, elapsed_seconds).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -41,6 +57,7 @@ pub fn run() {
         // (`src/shortcuts/tauriShortcutDriver.ts`). Rust only registers the
         // plugin itself, per the "Rust stays thin" constraint.
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![set_tray_state])
         .setup(|app| {
             tray::build_tray(app)?;
             Ok(())

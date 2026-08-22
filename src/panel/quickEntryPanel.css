@@ -1,0 +1,69 @@
+/* S4 quick-entry panel styling — tokens only (BUILD_SPEC advisory rule +
+   Design principle 4: "Tokens or it doesn't ship"). No literal colors,
+   spacing, or type values anywhere below. */
+
+.quick-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  box-sizing: border-box;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+}
+
+.quick-entry__notice {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.quick-entry__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  outline: none;
+  transition: border-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.quick-entry__input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.quick-entry__input:focus-visible {
+  border-color: var(--color-focus-ring);
+  box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+
+.quick-entry__suggestions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.quick-entry__suggestion {
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  border-top: 1px solid var(--color-border);
+}
+
+.quick-entry__suggestion:first-child {
+  border-top: none;
+}
