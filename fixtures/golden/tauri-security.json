@@ -1,0 +1,11 @@
+{
+  "csp": "default-src 'self'",
+  "capabilities": [
+    {
+      "identifier": "default",
+      "windows": ["main"],
+      "remote": null,
+      "permissions": ["core:default", "opener:default"]
+    }
+  ]
+}
