@@ -163,3 +163,11 @@
 .settings__updateStatus--error {
   color: var(--color-danger);
 }
+
+/* S12 review fix: a rejected OS autostart registration — same designed
+ * "error text under the control" treatment as `.settings__shortcutWarning`. */
+.settings__autostartError {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}

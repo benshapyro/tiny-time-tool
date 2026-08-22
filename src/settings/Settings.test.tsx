@@ -12,6 +12,7 @@ const BASE_STATE: SettingsState = {
   language: "system",
   theme: "system",
   autostart: true,
+  autostartError: false,
   version: "0.1.0",
   updateStatus: "idle",
 };
@@ -49,6 +50,23 @@ describe("Settings — shortcuts", () => {
     renderSettings();
     fireEvent.click(screen.getByRole("button", { name: CHANGE_PRIMARY }));
     expect(screen.getByText("Press a key combination…")).toBeInTheDocument();
+  });
+
+  // Review finding (S12): the listening surface used `autoFocus` on a plain
+  // `<div>` (even with `tabIndex={0}`) — React's `autoFocus` only calls
+  // `.focus()` for host elements like button/input/select/textarea, never
+  // an arbitrary element. So the capture surface never actually received
+  // focus, and a REAL key press (which the browser delivers to
+  // `document.activeElement`) would never reach its `onKeyDown` handler —
+  // only a test that dispatches the event straight at the node (as every
+  // other test in this file deliberately does, to test the handler in
+  // isolation) could pass. This test instead asserts focus itself, the way
+  // a real user's next keystroke would actually be routed.
+  it("entering listening mode actually moves focus onto the capture surface (not dispatched-at-the-node) so a real key press reaches it", () => {
+    renderSettings();
+    fireEvent.click(screen.getByRole("button", { name: CHANGE_PRIMARY }));
+    const listening = screen.getByRole("button", { name: "Press a key combination…" });
+    expect(document.activeElement).toBe(listening);
   });
 
   it("pressing a complete combination while listening calls onRebindShortcut with the built accelerator, and exits listening mode", () => {
@@ -151,7 +169,7 @@ describe("Settings — reminders", () => {
   // unreachable from any preset. Fixed with local `customMode` state, the
   // same "ephemeral UI state the presentational component owns" pattern
   // `listening` already uses for shortcut rebinding.
-  function StatefulSettings() {
+  function StatefulSettings({ onReminderMinutesChange }: { onReminderMinutesChange?: (minutes: number) => void }) {
     const [minutes, setMinutes] = useState(60);
     return (
       <Settings
@@ -159,7 +177,10 @@ describe("Settings — reminders", () => {
         platform="other"
         state={{ ...BASE_STATE, reminderMinutes: minutes }}
         onRebindShortcut={noop}
-        onReminderMinutesChange={setMinutes}
+        onReminderMinutesChange={(value) => {
+          setMinutes(value);
+          onReminderMinutesChange?.(value);
+        }}
         onLanguageChange={noop}
         onThemeChange={noop}
         onAutostartChange={noop}
@@ -191,6 +212,31 @@ describe("Settings — reminders", () => {
     fireEvent.change(screen.getByLabelText("Remind me every"), { target: { value: "30" } });
     expect(screen.queryByLabelText("Minutes")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Remind me every")).toHaveValue("30");
+  });
+
+  // Review finding (S12): selecting the digits in the custom field to
+  // retype them — a completely normal edit — leaves the field momentarily
+  // empty. The OLD code parsed "" with `Number.parseInt`, got `NaN`, and
+  // treated "not a finite number" as "the user meant 0", silently
+  // persisting reminders-off. A cleared field is an IN-PROGRESS edit, not a
+  // deliberate choice of the "Off" preset — this must not fire
+  // `onReminderMinutesChange` at all while the field is empty, and the
+  // field itself must stay empty (not snap back to a stale number) so the
+  // user can keep typing.
+  it("clearing the custom minutes field is an in-progress edit — it does NOT persist 0, and the field stays empty for further typing", () => {
+    const onReminderMinutesChange = vi.fn();
+    render(<StatefulSettings onReminderMinutesChange={onReminderMinutesChange} />);
+    fireEvent.change(screen.getByLabelText("Remind me every"), { target: { value: "custom" } });
+    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "45" } });
+    onReminderMinutesChange.mockClear();
+
+    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "" } });
+
+    expect(onReminderMinutesChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Minutes")).toHaveValue(null);
+
+    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "5" } });
+    expect(onReminderMinutesChange).toHaveBeenCalledWith(5);
   });
 });
 
@@ -238,6 +284,19 @@ describe("Settings — autostart", () => {
     renderSettings({ state: { ...BASE_STATE, autostart: true }, onAutostartChange });
     fireEvent.click(screen.getByRole("checkbox"));
     expect(onAutostartChange).toHaveBeenCalledWith(false);
+  });
+
+  it("renders no error by default", () => {
+    renderSettings();
+    expect(screen.queryByText(/couldn't register with the OS/i)).not.toBeInTheDocument();
+  });
+
+  // Review finding (S12): a rejected OS autostart registration must
+  // surface as a designed, visible state — never silently swallowed.
+  it("renders a designed error when the OS-level registration failed, while still showing the user's persisted intent", () => {
+    renderSettings({ state: { ...BASE_STATE, autostart: false, autostartError: true } });
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn't register with the OS/i);
   });
 });
 

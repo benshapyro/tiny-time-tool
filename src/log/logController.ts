@@ -155,7 +155,7 @@ export interface LogControllerOptions {
 
 export class LogController {
   readonly #engine: TimerEngine;
-  readonly #locale: Locale;
+  #locale: Locale;
   readonly #primaryAccelerator: string;
   readonly #clock: () => Date;
   readonly #onStateChange?: (state: LogState) => void;
@@ -202,6 +202,19 @@ export class LogController {
 
   get state(): LogState {
     return this.#state;
+  }
+
+  /** S12 review fix: the live-locale seam — mirrors `ReminderController.
+   * setMinutes()`'s "persistence and live behaviour are separate" split.
+   * Every locale-baked field on `LogState` (entry display names, the
+   * empty-state teach line, edit-error messages) was computed under the
+   * OLD locale by the last `refresh()`/`saveEdit()` call — this only
+   * updates which locale FUTURE computations use; the caller (`bootstrap.
+   * ts`'s "setLanguage" wiring) is responsible for calling `refresh()`
+   * afterward to re-push the already-open Log tab's current view under the
+   * new locale immediately. */
+  setLocale(locale: Locale): void {
+    this.#locale = locale;
   }
 
   /** Recomputes the full view for whichever day is currently being viewed.

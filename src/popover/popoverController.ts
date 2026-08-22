@@ -104,7 +104,7 @@ export interface PopoverControllerOptions {
 
 export class PopoverController {
   readonly #engine: TimerEngine;
-  readonly #locale: Locale;
+  #locale: Locale;
   readonly #primaryAccelerator: string;
   readonly #clock: () => Date;
   readonly #onSwitch?: () => void | Promise<void>;
@@ -127,6 +127,16 @@ export class PopoverController {
 
   get state(): PopoverState {
     return this.#state;
+  }
+
+  /** S12 review fix: the live-locale seam — mirrors `ReminderController.
+   * setMinutes()`'s "persistence and live behaviour are separate" split.
+   * Entry names, the teach line, and the away-prompt message are baked by
+   * the last `refresh()` under the OLD locale — this only updates which
+   * locale FUTURE computations use; the caller is responsible for calling
+   * `refresh()` afterward to re-push the current view live. */
+  setLocale(locale: Locale): void {
+    this.#locale = locale;
   }
 
   /** Recomputes the full view from the engine + database. Call on open and

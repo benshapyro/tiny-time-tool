@@ -37,6 +37,7 @@ const IDLE_STATE: SettingsState = {
   language: "system",
   theme: "system",
   autostart: true,
+  autostartError: false,
   version: "",
   updateStatus: "idle",
 };
@@ -45,18 +46,28 @@ function SettingsContainer() {
   const locale = useLocale();
   const [state, setState] = useState<SettingsState>(IDLE_STATE);
 
-  useEffect(() => {
-    const unlisten = listen<SettingsState>(SETTINGS_STATE_EVENT, (event) => {
-      setState(event.payload);
-    });
-    return () => {
-      void unlisten.then((fn) => fn());
-    };
-  }, []);
-
   const dispatch = (action: SettingsActionKind) => {
     void emit(SETTINGS_ACTION_EVENT, { action });
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const unlisten = listen<SettingsState>(SETTINGS_STATE_EVENT, (event) => {
+      setState(event.payload);
+    });
+    // Review finding (S12): request the current state ONLY after the
+    // listener above is actually registered (the listener's own promise
+    // resolving is the real signal — not merely having called `listen()`),
+    // so bootstrap.ts's re-emitted reply can never arrive before anything
+    // is listening for it.
+    void unlisten.then(() => {
+      if (!cancelled) dispatch({ type: "requestState" });
+    });
+    return () => {
+      cancelled = true;
+      void unlisten.then((fn) => fn());
+    };
+  }, []);
 
   return (
     <Settings

@@ -547,6 +547,55 @@ cannot fail.**
   only language and theme for live-swap, so this was judged scope growth rather than a
   stated requirement — but it is real and findable.
 
+### F12 — five bugs in S12, and the one that proves units cannot see seams
+
+The review found five real bugs in S12. None were contested. The first is the one worth
+studying.
+
+**The language setting never reached the controllers.** `bootstrap.ts` still carried
+`const LOCALE: Locale = "en"` with a comment saying "until S12 lands" — and this *was*
+S12. Five controllers pre-format locale-sensitive strings into their state: the
+notification title and body, the Log empty-state teach line and edit errors, the popover
+teach line and away prompt, Insights weekday and percent labels. Switching `useLocale()`
+in the React layer cannot repair text that was already baked. Choosing Español left all
+of it in English — and so did restarting with Spanish already persisted. That is the S12
+acceptance criterion, not merely the "without restart" half of it.
+
+**The coordinator's own drills passed.** Rows 58 and 59 broke `applyTheme` and
+`resolveLocale` and both went red correctly. Those functions were never the problem. The
+wire between them and the controllers did not exist, and **no unit-level drill can see
+an absent wire** — the drill proves a function *can* fail, not that anything calls it.
+
+Fixed with a `setLocale` seam on all five controllers, a real `getLanguageSetting` +
+`resolveLocale` read at boot, and `applyLocaleLive` invoked from the language action. The
+new `applyLocale.test.ts` wires all five against a real SQLite engine and asserts that
+**already-baked** state flips — coordinator-drilled by neutering `setLocale` on one
+controller: `expected 'Press Ctrl+Shift+Space to start tracking' to match /pulsa/i`,
+which is the shipped bug's exact symptom.
+
+The other four, all real:
+
+- **The Settings tab showed defaults on first open.** The state event fires once at boot;
+  the tab mounts later (Log is the default tab) and Tauri does not replay to late
+  listeners. Fixed with a `requestState` action dispatched *after* the listener resolves.
+  The missing handler is now a **compile** error, via the file's exhaustive-`never`
+  switch — deleting the case fails `tsc` with `TS2322`.
+- **Clearing the reminder field silently turned reminders off** — `parseInt("")` → `NaN`
+  → `0`, and `0` means off. Selecting the digits to retype is a normal edit, not a
+  request to disable reminders.
+- **The shortcut-rebind capture surface could never receive a keypress.** React's
+  `autoFocus` only applies to host form elements, not a `<div role="button">`. Every
+  existing test passed because they dispatched synthetic events straight at the node; the
+  new test asserts `document.activeElement` actually *is* the surface.
+- **An autostart rejection escaped unhandled — in two places, not the one reported.** The
+  implementer found the second: `SettingsController.create()`'s boot-time reconciliation,
+  which `bootstrap` awaits before every other controller. A single denied LaunchAgent
+  write would have broken the whole app's boot, not just autostart.
+
+**Five of the last seven findings in this file came from seams, not units** — popover→tray
+(S5), switch-commit→tray (S6), away-prompt→shortcut exits (S9), and language→controllers
+here. Every one had passing unit tests on both sides of the gap.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -578,7 +627,7 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 - Checks verified: **61 of 61** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
   3 S10, 3 S11, 4 S12), every one re-run by the coordinator rather than inherited from
   an implementer's report.
-- Found broken and repaired: **9** — F1 (both Windows zero-network gates vacuous),
+- Found broken and repaired: **10** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
   by CI within minutes of the repo going public), F4 (`node:crypto` in the frontend
@@ -591,7 +640,10 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
   reading across module boundaries — not by a failing test.** That ratio has held
   steady for five slices and is the strongest argument for keeping all three practices.
   F7 is the sharpest: the failing check was the coordinator's own, and it had already
-  been contradicted once before anyone thought to test the check itself.
+  been contradicted once before anyone thought to test the check itself. **F12 is the
+  most instructive**: the coordinator's drills all went red correctly and the slice still
+  shipped five bugs, because a drill proves a function *can* fail and says nothing about
+  whether anything calls it.
 - Open, recorded, awaiting Ben: **F9** (desktop notification clicks are not deliverable
   by this plugin) and **F10** (native date/time inputs follow the OS locale, so a
   Spanish user can misread an export range). Neither is a defect in the slice that

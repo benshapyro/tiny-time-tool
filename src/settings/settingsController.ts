@@ -47,6 +47,15 @@ export interface SettingsState {
   language: LanguageSetting;
   theme: ThemeSetting;
   autostart: boolean;
+  /** S12 review fix: `true` when the most recent OS-level autostart
+   * registration attempt (at boot reconciliation, or a live
+   * `setAutostart()` call) rejected — a denied LaunchAgent write, an
+   * unsigned build, or capability drift. `autostart` above still reflects
+   * the user's PERSISTED intent (the write to the settings table itself
+   * never fails on an OS refusal); this flag is what the UI renders as a
+   * "couldn't register with the OS" notice, same "designed state, never an
+   * unhandled rejection" pattern as `updateStatus`. */
+  autostartError: boolean;
   version: string;
   /** Result of the most recent `checkForUpdates()` call — `"idle"` until
    * first attempted. Same "designed state, not a silent no-op" pattern as
@@ -103,10 +112,22 @@ export class SettingsController {
       getShortcutSetting(options.driver, "stop"),
     ]);
 
-    if (autostart) {
-      await options.autostart.enable();
-    } else {
-      await options.autostart.disable();
+    // Review finding (S12): this reconciliation call ran unguarded, so an
+    // OS-level refusal rejected `create()` ITSELF — which `bootstrap.ts`
+    // awaits ahead of constructing every other controller, meaning a single
+    // denied LaunchAgent write could have broken the whole app's startup.
+    // Caught the same way `checkForUpdates()` already handles its own
+    // opener rejection: never rethrown, surfaced as a designed state field
+    // instead.
+    let autostartError = false;
+    try {
+      if (autostart) {
+        await options.autostart.enable();
+      } else {
+        await options.autostart.disable();
+      }
+    } catch {
+      autostartError = true;
     }
 
     options.reminders.setMinutes(reminderMinutes);
@@ -126,6 +147,7 @@ export class SettingsController {
       language,
       theme,
       autostart,
+      autostartError,
       version,
       updateStatus: "idle",
     };
@@ -177,15 +199,29 @@ export class SettingsController {
   }
 
   /** Persists the user's intent AND reconciles the real OS registration to
-   * match, immediately (not just at next boot). */
+   * match, immediately (not just at next boot). Review finding (S12): a
+   * rejected `enable()`/`disable()` (denied LaunchAgent write, unsigned
+   * build, capability drift) used to escape this method entirely — every
+   * caller (`bootstrap.ts`'s action handler) only does `void
+   * settings.setAutostart(...)`, so that became an unhandled promise
+   * rejection. Handled the way `checkForUpdates()` already handles its own
+   * opener rejection: never rethrown, surfaced as `autostartError` instead.
+   * Persistence (`setAutostartSetting`, above the try) is NOT guarded the
+   * same way — a database write failing is a different, unrecovered kind of
+   * problem this slice doesn't newly introduce a policy for; only the
+   * OS-registration call is what this finding is about. */
   async setAutostart(enabled: boolean): Promise<void> {
     await setAutostartSetting(this.#driver, enabled);
-    if (enabled) {
-      await this.#autostart.enable();
-    } else {
-      await this.#autostart.disable();
+    try {
+      if (enabled) {
+        await this.#autostart.enable();
+      } else {
+        await this.#autostart.disable();
+      }
+      this.#setState({ autostart: enabled, autostartError: false });
+    } catch {
+      this.#setState({ autostart: enabled, autostartError: true });
     }
-    this.#setState({ autostart: enabled });
   }
 
   /** Opens the pinned download page via the injected opener — an OPENER

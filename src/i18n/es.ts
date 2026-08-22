@@ -117,6 +117,7 @@ export const es: Record<TranslationKey, string> = {
   "settings.appearance.dark": "Oscuro",
   "settings.autostart.title": "Inicio automático",
   "settings.autostart.label": "Abrir Tiny Time Tool automáticamente al iniciar sesión",
+  "settings.autostart.error": "No se pudo registrar con el sistema — tu elección se guardó, pero el inicio automático podría no aplicarse",
   "settings.about.title": "Acerca de",
   "settings.about.version": "Versión {version}",
   "settings.about.checkForUpdates": "Buscar actualizaciones",

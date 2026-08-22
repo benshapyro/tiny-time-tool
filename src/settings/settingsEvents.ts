@@ -24,7 +24,14 @@ export type SettingsActionKind =
   | { type: "setLanguage"; language: LanguageSetting }
   | { type: "setTheme"; theme: ThemeSetting }
   | { type: "setAutostart"; enabled: boolean }
-  | { type: "checkForUpdates" };
+  | { type: "checkForUpdates" }
+  // Review finding (S12): `SETTINGS_STATE_EVENT` is only ever pushed at
+  // boot and on mutation — `SettingsContainer` mounts late (Settings isn't
+  // the default tab) and Tauri never replays past events to a late
+  // listener, so the tab rendered `IDLE_STATE` defaults until the user
+  // changed something else. This action lets a just-mounted container ask
+  // for the state it missed.
+  | { type: "requestState" };
 
 export interface SettingsActionPayload {
   action: SettingsActionKind;

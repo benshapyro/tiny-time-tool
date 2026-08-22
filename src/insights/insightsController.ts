@@ -112,7 +112,7 @@ export interface InsightsControllerOptions {
 
 export class InsightsController {
   readonly #engine: TimerEngine;
-  readonly #locale: Locale;
+  #locale: Locale;
   readonly #clock: () => Date;
   readonly #onStateChange?: (state: InsightsState) => void;
   #state: InsightsState;
@@ -127,6 +127,16 @@ export class InsightsController {
 
   get state(): InsightsState {
     return this.#state;
+  }
+
+  /** S12 review fix: the live-locale seam — mirrors `ReminderController.
+   * setMinutes()`'s "persistence and live behaviour are separate" split.
+   * `days[].weekdayLabel` and every `percentLabel` are baked by the last
+   * `refresh()` under the OLD locale — this only updates which locale
+   * FUTURE computations use; the caller is responsible for calling
+   * `refresh()` afterward to re-push the current week's view live. */
+  setLocale(locale: Locale): void {
+    this.#locale = locale;
   }
 
   /** Recomputes the full view for the CURRENT week (the injected clock's

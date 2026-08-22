@@ -74,6 +74,18 @@ function Settings({
   // component remembers "the user asked for custom" locally until a real
   // number commits it.
   const [customMode, setCustomMode] = useState(false);
+  // Review finding (S12): selecting the digits in the custom field to
+  // retype them leaves it briefly empty — a normal in-progress edit, not a
+  // choice of "0 (off)". `Number.parseInt("", 10)` is `NaN`, and the old
+  // code folded "not a finite number" straight into 0, silently turning
+  // reminders off on every clear-and-retype. This mirrors `customMode`'s
+  // own "ephemeral UI state the presentational component owns, not derived
+  // from `state`" pattern: while the field is empty, there is no committed
+  // number to derive a value from, so this remembers the raw in-progress
+  // text instead of guessing one. `null` means "not editing — show
+  // `state.reminderMinutes`"; any string (including "") is what the user
+  // is currently typing.
+  const [customDraft, setCustomDraft] = useState<string | null>(null);
 
   const warningFor = (id: ShortcutId) => state.shortcutWarnings.find((w) => w.id === id) ?? null;
 
@@ -107,7 +119,16 @@ function Settings({
             className="settings__shortcutListening"
             tabIndex={0}
             role="button"
-            autoFocus
+            // Review finding (S12): React's `autoFocus` only auto-focuses
+            // host form elements (button/input/select/textarea) — never an
+            // arbitrary element like this `<div>`, even with `tabIndex={0}`.
+            // A callback ref calls `.focus()` directly the moment this node
+            // mounts (i.e. exactly when a row enters listening mode), which
+            // works for any focusable element and needs no `useEffect`
+            // (this is a plain function, not its own component).
+            ref={(node) => {
+              node?.focus();
+            }}
             aria-label={t(locale, "settings.shortcuts.listening")}
             onKeyDown={handleKeyDown(id)}
           >
@@ -163,6 +184,7 @@ function Settings({
               return; // wait for a real number in the field below
             }
             setCustomMode(false);
+            setCustomDraft(null); // leaving custom entirely — no in-progress edit to remember
             onReminderMinutesChange(Number.parseInt(value, 10));
           }}
         >
@@ -182,10 +204,15 @@ function Settings({
               className="settings__numberInput"
               type="number"
               min={0}
-              value={state.reminderMinutes}
+              value={customDraft ?? state.reminderMinutes}
               onChange={(event) => {
-                const parsed = Number.parseInt(event.target.value, 10);
-                onReminderMinutesChange(Number.isFinite(parsed) && parsed >= 0 ? parsed : 0);
+                const raw = event.target.value;
+                setCustomDraft(raw);
+                if (raw === "") return; // in-progress edit — do not persist 0 for an empty field
+                const parsed = Number.parseInt(raw, 10);
+                if (Number.isFinite(parsed) && parsed >= 0) {
+                  onReminderMinutesChange(parsed);
+                }
               }}
             />
           </>
@@ -241,6 +268,11 @@ function Settings({
           />
           {t(locale, "settings.autostart.label")}
         </label>
+        {state.autostartError && (
+          <p className="settings__autostartError" role="alert">
+            {t(locale, "settings.autostart.error")}
+          </p>
+        )}
       </div>
 
       <div className="settings__group">

@@ -66,7 +66,7 @@ export interface ReminderControllerOptions {
 export class ReminderController {
   readonly #engine: TimerEngine;
   readonly #driver: NotificationDriver;
-  readonly #locale: Locale;
+  #locale: Locale;
   readonly #clock: () => Date;
   readonly #onOpenPopover?: () => void | Promise<void>;
   #minutes: number;
@@ -93,6 +93,17 @@ export class ReminderController {
    * as `ShortcutController.rebind()` vs. the accelerator settings keys). */
   setMinutes(minutes: number): void {
     this.#minutes = minutes;
+  }
+
+  /** S12 review fix: the live-locale seam this doc comment's own "same split
+   * as..." reference on `setMinutes` above pointed to before it existed.
+   * Nothing is baked ahead of time here — the notification title/body are
+   * built fresh inside `#fireNudge` at the moment a nudge actually fires —
+   * so unlike the refresh-needing controllers (`LogController`/
+   * `InsightsController`/`PopoverController`), this alone is enough: the
+   * very next `tick()` that fires a nudge already uses the new locale. */
+  setLocale(locale: Locale): void {
+    this.#locale = locale;
   }
 
   /** Registers this controller to open the popover when the user clicks a

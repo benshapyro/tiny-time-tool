@@ -118,6 +118,33 @@ describe("SettingsController.create — initial state", () => {
     expect(await autostart.isEnabled()).toBe(false);
   });
 
+  // Review finding (S12): the SAME unguarded `enable()`/`disable()` call
+  // this reconciliation makes at every boot can reject too (a denied
+  // LaunchAgent write, an unsigned build, capability drift) — and unlike
+  // `setAutostart()`'s later call, a rejection HERE previously rejected
+  // `SettingsController.create()` itself, which `bootstrap.ts` awaits
+  // ahead of every other controller's boot-time push — a single OS
+  // refusal would have broken the whole app's startup, not just autostart.
+  it("a rejected OS registration during boot reconciliation does not reject create() — it surfaces the same designed error state", async () => {
+    const driver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(driver, () => new Date("2026-08-22T09:00:00.000Z"));
+    const shortcuts = new ShortcutController({ driver: createFakeShortcutDriver(), engine });
+    await shortcuts.registerAll();
+    const reminders = new ReminderController({ engine, driver: createFakeNotificationDriver(), locale: "en" });
+    const failingAutostart = createFakeAutostartDriver(false, { failing: true });
+
+    await expect(
+      SettingsController.create({
+        driver,
+        shortcuts,
+        reminders,
+        autostart: failingAutostart,
+        openUpdatePage: vi.fn(async () => {}),
+        getVersion: vi.fn(async () => "0.1.0"),
+      }),
+    ).resolves.toBeInstanceOf(SettingsController);
+  });
+
   it("applies the persisted reminder.minutes to the live ReminderController, not just its own state", async () => {
     const driver = trackDriver(dbPath);
     const { setReminderMinutes } = await import("../reminders/reminderSettings");
@@ -247,6 +274,61 @@ describe("setAutostart", () => {
     expect(settings.state.autostart).toBe(false);
     expect(await autostart.isEnabled()).toBe(false);
     expect(await getAutostartSetting(driver)).toBe(false);
+  });
+
+  // Review finding (S12): a denied LaunchAgent write, an unsigned build, or
+  // OS capability drift can make `autostart.enable()`/`disable()` reject.
+  // The old code let that rejection propagate straight out of
+  // `setAutostart()` — an unhandled promise rejection in `bootstrap.ts`,
+  // which only ever calls `void settings.setAutostart(...)` and has nothing
+  // to catch it. This must behave like the away-gap and panel-commit paths
+  // already do: surface a designed state instead of crashing/dangling.
+  it("a rejected OS registration does not throw, still persists the user's intent, and surfaces a designed error state", async () => {
+    const driver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(driver, () => new Date("2026-08-22T09:00:00.000Z"));
+    const shortcuts = new ShortcutController({ driver: createFakeShortcutDriver(), engine });
+    await shortcuts.registerAll();
+    const reminders = new ReminderController({ engine, driver: createFakeNotificationDriver(), locale: "en" });
+    const failingAutostart = createFakeAutostartDriver(true, { failing: true });
+    const settings = await SettingsController.create({
+      driver,
+      shortcuts,
+      reminders,
+      autostart: failingAutostart,
+      openUpdatePage: vi.fn(async () => {}),
+      getVersion: vi.fn(async () => "0.1.0"),
+    });
+
+    await expect(settings.setAutostart(false)).resolves.toBeUndefined();
+
+    expect(settings.state.autostart).toBe(false); // the user's intent, still shown
+    expect(settings.state.autostartError).toBe(true);
+    expect(await getAutostartSetting(driver)).toBe(false); // persistence is unaffected by the OS-level failure
+  });
+
+  it("a later successful call clears a previously-surfaced autostart error", async () => {
+    const driver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(driver, () => new Date("2026-08-22T09:00:00.000Z"));
+    const shortcuts = new ShortcutController({ driver: createFakeShortcutDriver(), engine });
+    await shortcuts.registerAll();
+    const reminders = new ReminderController({ engine, driver: createFakeNotificationDriver(), locale: "en" });
+    const failingAutostart = createFakeAutostartDriver(true, { failing: true });
+    const settings = await SettingsController.create({
+      driver,
+      shortcuts,
+      reminders,
+      autostart: failingAutostart,
+      openUpdatePage: vi.fn(async () => {}),
+      getVersion: vi.fn(async () => "0.1.0"),
+    });
+    await settings.setAutostart(false);
+    expect(settings.state.autostartError).toBe(true);
+
+    failingAutostart.setFailing(false);
+    await settings.setAutostart(true);
+
+    expect(settings.state.autostartError).toBe(false);
+    expect(settings.state.autostart).toBe(true);
   });
 });
 

@@ -74,6 +74,9 @@ import { consumeFirstLaunch } from "./firstLaunchFlag";
 import { ReminderController } from "../reminders/reminderController";
 import { getReminderMinutes } from "../reminders/reminderSettings";
 import { createTauriNotificationDriver } from "../reminders/tauriNotificationDriver";
+import { applyLocaleLive } from "../settings/applyLocale";
+import { getLanguageSetting } from "../settings/languageSetting";
+import { detectSystemLocale, resolveLocale } from "../settings/resolveLocale";
 import { createTauriAutostartDriver } from "../settings/tauriAutostartDriver";
 import { getShortcutSetting } from "../settings/shortcutSettings";
 import { SettingsController } from "../settings/settingsController";
@@ -82,10 +85,6 @@ import type { SettingsActionPayload } from "../settings/settingsEvents";
 import { tauriUpdateOpener } from "../settings/tauriUpdateOpener";
 import { createTauriSqlDriver } from "../timer/tauriSqlDriver";
 import { TimerEngine } from "../timer/timerEngine";
-
-// S4 placeholder, same convention as App.tsx: language comes from Settings
-// (`language`) and OS detection once S12 lands. Default "en" until then.
-const LOCALE: Locale = "en";
 
 // S5: mirrors `TRAY_CLICKED_EVENT` in `src-tauri/src/tray.rs` — Rust only
 // emits this on a tray-icon left-click; deciding what it means
@@ -133,9 +132,19 @@ async function run(): Promise<Bootstrapped> {
   const persistedPrimaryAccelerator = await getShortcutSetting(sqlDriver, "primary");
   const persistedStopAccelerator = await getShortcutSetting(sqlDriver, "stop");
 
+  // S12 review fix: this used to be a hardcoded `const LOCALE: Locale =
+  // "en"` placeholder (dating back to S4, "until S12 lands" — this IS
+  // S12), so a persisted `language: "es"` from a PRIOR session never
+  // reached a single controller, even on a fresh boot. Read before every
+  // locale-aware controller below is constructed, same "read once at boot,
+  // an explicit seam makes it live later" pattern `persistedPrimaryAccelerator`
+  // above already establishes for shortcuts.
+  const persistedLanguage = await getLanguageSetting(sqlDriver);
+  const locale: Locale = resolveLocale(persistedLanguage, detectSystemLocale());
+
   const panel = new QuickEntryController({
     engine,
-    locale: LOCALE,
+    locale,
     onStateChange: (state) => {
       void emit(PANEL_STATE_EVENT, state);
     },
@@ -160,7 +169,7 @@ async function run(): Promise<Bootstrapped> {
   // `logController.ts`'s module doc comment for the full reasoning.
   const dashboard = new LogController({
     engine,
-    locale: LOCALE,
+    locale,
     primaryAccelerator: persistedPrimaryAccelerator,
     onStateChange: (state) => {
       void emit(LOG_STATE_EVENT, state);
@@ -194,7 +203,7 @@ async function run(): Promise<Bootstrapped> {
   // current week.
   const insights = new InsightsController({
     engine,
-    locale: LOCALE,
+    locale,
     onStateChange: (state) => {
       void emit(INSIGHTS_STATE_EVENT, state);
     },
@@ -225,7 +234,7 @@ async function run(): Promise<Bootstrapped> {
 
   const popover: PopoverController = new PopoverController({
     engine,
-    locale: LOCALE,
+    locale,
     primaryAccelerator: persistedPrimaryAccelerator,
     onSwitch: () => switchAction(),
     awayGap,
@@ -453,7 +462,7 @@ async function run(): Promise<Bootstrapped> {
   const reminders = new ReminderController({
     engine,
     driver: createTauriNotificationDriver(),
-    locale: LOCALE,
+    locale,
     minutes: reminderMinutes,
     onOpenPopover: () => showPopover(),
   });
@@ -490,7 +499,18 @@ async function run(): Promise<Bootstrapped> {
         void settings.setReminderMinutes(action.minutes);
         return;
       case "setLanguage":
-        void settings.setLanguage(action.language);
+        // Review finding (S12): persisting alone is not "applies without
+        // restart" — `panel`/`dashboard`/`insights`/`popover`/`reminders`
+        // each pre-format locale-sensitive text INTO their state, which
+        // `useLocale()`'s React-layer re-render cannot fix retroactively.
+        // `applyLocaleLive` is the real seam (see its own doc comment and
+        // `applyLocale.test.ts`) — called only AFTER persistence succeeds,
+        // so a failed write never applies a locale that didn't actually
+        // stick.
+        void settings.setLanguage(action.language).then(() => {
+          const newLocale = resolveLocale(action.language, detectSystemLocale());
+          return applyLocaleLive(newLocale, { panel, dashboard, insights, popover, reminders });
+        });
         return;
       case "setTheme":
         void settings.setTheme(action.theme);
@@ -500,6 +520,14 @@ async function run(): Promise<Bootstrapped> {
         return;
       case "checkForUpdates":
         void settings.checkForUpdates();
+        return;
+      case "requestState":
+        // Review finding (S12): a just-mounted `SettingsContainer` missed
+        // the boot-time push (it isn't the default tab) and Tauri never
+        // replays a past event to a late listener — re-emit the CURRENT
+        // state (not a recomputed one) so a late-opened Settings tab shows
+        // real values instead of `IDLE_STATE` defaults.
+        void emit(SETTINGS_STATE_EVENT, settings.state);
         return;
       default: {
         const exhaustive: never = action;

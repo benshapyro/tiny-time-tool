@@ -116,6 +116,7 @@ export const en = {
   "settings.appearance.dark": "Dark",
   "settings.autostart.title": "Launch at login",
   "settings.autostart.label": "Open Tiny Time Tool automatically when you log in",
+  "settings.autostart.error": "Couldn't register with the OS — your choice is saved, but launch-at-login may not take effect",
   "settings.about.title": "About",
   "settings.about.version": "Version {version}",
   "settings.about.checkForUpdates": "Check for updates",
