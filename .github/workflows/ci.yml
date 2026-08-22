@@ -62,6 +62,12 @@ jobs:
       - name: Check browser-safe imports
         run: node scripts/check-browser-safe-imports.mjs
 
+      # Design tokens: CLAUDE.md #4 requires every style value to come from
+      # tokens.css. Previously eyeballed, and eyeballed wrong — 14 literals
+      # accumulated while three slices reported "tokens only".
+      - name: Check design tokens
+        run: node scripts/check-design-tokens.mjs
+
       # Unsigned by design (BUILD_SPEC Non-goals: "No code signing in v1").
       # Neither platform has a signing identity configured here, and the
       # Tauri bundler doesn't require one — this must not fail the build.

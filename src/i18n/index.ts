@@ -36,6 +36,22 @@ export function formatShortDate(locale: Locale, date: Date): string {
   return shortDateFormatters[locale].format(date);
 }
 
+// S6: the Log tab's date-nav header, for a day other than "today" —
+// deliberately more detail than the short-date auto-name format above
+// (full weekday + year), since the Log lets someone browse arbitrarily far
+// into the past where "Aug 20" alone would be ambiguous across years.
+// Reuses Intl's own per-locale idiom (e.g. the "de" joining day/month/year
+// in es-ES) rather than hand-building a template — same reasoning as every
+// other formatter in this file.
+const longDateFormatters: Record<Locale, Intl.DateTimeFormat> = {
+  en: new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
+  es: new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+};
+
+export function formatLongDate(locale: Locale, date: Date): string {
+  return longDateFormatters[locale].format(date);
+}
+
 // Display-surface time formatter (BUILD_SPEC "Auto-name display format",
 // amended 2026-08-22): times on display surfaces follow the user's OS
 // locale convention — en-US is 12-hour with AM/PM, locales that

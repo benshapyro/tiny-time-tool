@@ -55,6 +55,8 @@
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --line-height-base: 1.4;
+  /* Tight: for single-glyph controls where 1.4 would add stray height. */
+  --line-height-tight: 1;
 
   /* Motion (Design principle 5: motion informs, never decorative) */
   --motion-duration-fast: 150ms;
@@ -64,6 +66,15 @@
   /* Size — surface minimums. Not spacing: these are the widths a surface
      must not collapse below, and components must not invent their own. */
   --size-popover-min-width: 280px;
+  --size-dashboard-min-width: 480px;
+
+  /* Border widths — a selected tab's underline and similar emphasis rules.
+     Hairlines are borders, not spacing, so they get their own scale. */
+  --border-width-hairline: 1px;
+  --border-width-emphasis: 2px;
+
+  /* Opacity — de-emphasis steps. */
+  --opacity-disabled: 0.5;
 
   /* Radius */
   --radius-sm: 4px;

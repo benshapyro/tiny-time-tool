@@ -35,6 +35,14 @@ export const en = {
   "key.enter": "Enter",
   "key.esc": "Esc",
   "key.tab": "Tab",
+  "dashboard.tabsLabel": "Dashboard tabs",
+  "dashboard.tab.log": "Log",
+  "log.nav.today": "Today",
+  "log.nav.previous": "Previous day",
+  "log.nav.next": "Next day",
+  "log.entriesLabel": "Entries",
+  "log.totalLabel": "Day total",
+  "log.emptyState": "Press {shortcut} to start tracking",
 } as const;
 
 export type TranslationKey = keyof typeof en;

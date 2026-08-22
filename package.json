@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "check:deps-allowlist": "node scripts/check-deps-allowlist.mjs",
     "check:zero-network": "node scripts/check-zero-network.mjs",
-    "check:browser-safe": "node scripts/check-browser-safe-imports.mjs"
+    "check:browser-safe": "node scripts/check-browser-safe-imports.mjs",
+    "check:design-tokens": "node scripts/check-design-tokens.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",

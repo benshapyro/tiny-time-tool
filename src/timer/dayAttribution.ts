@@ -20,3 +20,15 @@ export function localDayKey(date: Date): string {
 export function entryDayKey(firstSegmentStartedAt: string): string {
   return localDayKey(new Date(firstSegmentStartedAt));
 }
+
+/** Inverse of `localDayKey`: reconstructs the local midnight `Date` for a
+ * `YYYY-MM-DD` key (S6: the Log tab's date-nav header needs to render
+ * whichever day is being viewed). Deliberately built from numeric Y/M/D
+ * components (`new Date(y, m-1, d)`), never `new Date(dayKey)` — that
+ * parses as UTC midnight and would shift the date by a day in any
+ * negative-UTC-offset timezone, exactly the class of bug this file's own
+ * `localDayKey` comment already warns about. */
+export function dayKeyToDate(dayKey: string): Date {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return new Date(year!, month! - 1, day!);
+}
