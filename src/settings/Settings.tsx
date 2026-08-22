@@ -259,6 +259,11 @@ function Settings({
       </div>
 
       <div className="settings__group">
+        {/* S13a: this heading was missing — every other group here has one,
+            and `settings.autostart.title` was translated in both catalogs
+            with nothing rendering it. Found by the unused-key half of
+            `scripts/check-i18n-coverage.mjs`, not by eye. */}
+        <h3 className="settings__groupTitle">{t(locale, "settings.autostart.title")}</h3>
         <label className="settings__checkboxRow" htmlFor={`${idBase}-autostart`}>
           <input
             id={`${idBase}-autostart`}

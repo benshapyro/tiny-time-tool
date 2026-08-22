@@ -43,6 +43,18 @@ export interface LiveLocaleTargets {
   insights: LocaleRefreshable;
   popover: LocaleRefreshable;
   reminders: LocaleSettable;
+  /** S13a: the native tray menu and tooltip, which live in Rust and cannot
+   * call `t()` themselves — `src/tray/tauriTrayLabelDriver.ts` resolves the
+   * `tray.*` keys here in TS and pushes the strings over the
+   * `set_tray_labels` command. A plain function rather than a controller
+   * because there is no TS-side state to keep: the OS owns the menu.
+   *
+   * REQUIRED, not optional, on purpose. The tray was untranslated for
+   * twelve slices precisely because nothing forced anyone to wire it; a
+   * required field means `tsc` fails if a future caller of this seam
+   * forgets, which is the same lesson S12's own review left behind — a test
+   * that a translation exists is not a test that anything reaches it. */
+  tray: (locale: Locale) => void | Promise<void>;
 }
 
 /** Applies `locale` to every locale-aware controller and refreshes the ones
@@ -56,5 +68,10 @@ export async function applyLocaleLive(locale: Locale, targets: LiveLocaleTargets
   targets.popover.setLocale(locale);
   targets.reminders.setLocale(locale);
 
-  await Promise.all([targets.dashboard.refresh(), targets.insights.refresh(), targets.popover.refresh()]);
+  await Promise.all([
+    targets.dashboard.refresh(),
+    targets.insights.refresh(),
+    targets.popover.refresh(),
+    targets.tray(locale),
+  ]);
 }

@@ -100,9 +100,22 @@ describe("applyLocaleLive — the real wiring bootstrap.ts's \"setLanguage\" act
     expect(popover.state.teachLine).toMatch(/press/i);
     expect(insights.state.days[0]?.weekdayLabel).toBe("Mon");
 
+    // S13a: the native tray is the sixth target. It is a spy rather than a
+    // controller because the real one crosses into Rust — what this has to
+    // prove is that the seam REACHES it, which is the half that was missing
+    // for twelve slices.
+    const trayCalls: string[] = [];
+    const tray = (next: "en" | "es") => {
+      trayCalls.push(next);
+    };
+
     // The actual "setLanguage" wiring: this is the literal function call
     // `bootstrap.ts` makes, not a hand-rolled substitute.
-    await applyLocaleLive("es", { panel, dashboard, insights, popover, reminders });
+    await applyLocaleLive("es", { panel, dashboard, insights, popover, reminders, tray });
+
+    // The tray menu and tooltip get the new locale too — the surface that
+    // stayed English through every previous slice.
+    expect(trayCalls).toEqual(["es"]);
 
     // Every already-baked piece of state now reads in Spanish — proving the
     // controllers were actually reached, not just that resolveLocale itself
@@ -130,7 +143,7 @@ describe("applyLocaleLive — the real wiring bootstrap.ts's \"setLanguage\" act
     await dashboard.refresh();
     const before = dashboard.state.dayKey;
 
-    await applyLocaleLive("es", { panel, dashboard, insights, popover, reminders });
+    await applyLocaleLive("es", { panel, dashboard, insights, popover, reminders, tray: () => {} });
 
     // The refresh this triggers must not change anything OTHER than the
     // locale-sensitive text — e.g. it must not silently jump the viewed day.
