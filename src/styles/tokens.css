@@ -22,14 +22,21 @@
   --color-text-inverse: #ffffff;
 
   /* Color: brand / accent */
-  --color-accent: #2f6fed;
+  /* S14 gate finding: the light-theme state and status colours below failed
+     WCAG AA for normal-size text on white — 84 measured failures across the
+     popover, Log, export and Settings surfaces. Design principle 8 sets AA as
+     a floor, so these were darkened until every one clears 4.5:1 with real
+     headroom (measured on #ffffff, the hardest background in the palette).
+     The hue families are unchanged; the exact shades are Ben's to tune at the
+     gate. The dark theme measured clean and is untouched. */
+  --color-accent: #2563d4;
   --color-accent-hover: #1f5be0;
 
   /* Color: state */
-  --color-state-running: #2f9e5c;
-  --color-state-paused: #d68a1f;
+  --color-state-running: #1b7340;
+  --color-state-paused: #965d0c;
   --color-state-idle: #8a8a94;
-  --color-danger: #d94f4f;
+  --color-danger: #c0392b;
 
   /* Focus ring (accessibility floor: WCAG AA visible focus) */
   --color-focus-ring: #2f6fed;
