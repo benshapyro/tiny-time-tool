@@ -92,6 +92,49 @@ Provenance tags: `[HUMAN]` = Ben said it · `[DOC: source]` = named source · `[
 53. **Spanish idiom rule**: running state = `en curso`, never `rastreando`; S13a reviews idiom. `[HUMAN]`
 54. Skill-improvement issues filed on CadreAI/cadre-plugins-official: #66–70 (2026-08-22 batch 1); installer-workflow duplication, autonomous-design-review-not-mid-run-gates, review-loop-default-at-every-tier + tier/level naming, turn-count observability (batch 2, this date). `[HUMAN]` (directed)
 
+## Batch 9 — repository visibility (settled 2026-08-22)
+
+55. **Repository made public** — `benshapyro/tiny-time-tool` switched from private to
+    public on 2026-08-22. **Supersedes #33 and #47's private-repo call.** `[HUMAN]`
+    (Ben, explicit: "i approve making it public - you can make the change now")
+
+    *Cause.* GitHub Actions stopped starting any job — every run failed in ~3s with zero
+    steps and the annotation *"The job was not started because recent account payments
+    have failed or your spending limit needs to be increased."* That blocks `Done #2`
+    (CI green on both platforms with both installer artifacts) outright. Actions is free
+    and unlimited for public repositories on standard runners, so publishing restores
+    `Done #2` **exactly as written** — `macos-latest` + `windows-latest` — with no
+    amendment to the acceptance criteria.
+
+    *Not caused by this project.* GitHub's own timing API reported `total_ms: 0` billable
+    for both platforms on every run, including the 19-minute Windows build. Throttling CI
+    would not have helped; the failure is account-level.
+
+    *What was weighed.* Ben's first instinct was to `.gitignore` `docs/specs/` and
+    `decisions.md` before publishing. That does not work: those files are in nine commits
+    including the initial one, so every historical version stays readable via
+    `git log -p`, and purging them would need `filter-repo` plus a force-push — which
+    rewrites the merged S1 commit, breaks the open PRs, and violates the spec's
+    never-force-push rule. `verification.md`, a required `Done #6` deliverable, also
+    lives under `docs/specs/`. Ben reviewed what would become visible (team composition,
+    pilot adoption targets, ClickUp usage, the time-reconstruction problem, the $99 cert
+    deferral) and accepted it: *"i dont care about that internal process material being
+    visible in git."*
+
+    *Verified before publishing.* Full history scanned for credential-shaped strings
+    (`gh[pousr]_*`, `sk-*`, private-key blocks, `AKIA*`, password assignments): none
+    found. Repository secrets such as `CLAUDE_CODE_OAUTH_TOKEN` are not exposed by a
+    visibility change.
+
+    *Consequence to remember.* On public repos, `pull_request` events from **forks** do
+    not receive secrets, so the Claude review workflow will not authenticate on outside
+    contributions. Irrelevant while only Ben and the run push branches; it would look
+    like a mysterious review failure otherwise.
+
+    *Immediate payoff.* The first CI run after publishing caught a real cross-platform
+    defect within minutes — unclosed SQLite handles failing `rmSync` with `EPERM` on
+    Windows, invisible on macOS, already copied into S3. See `verification.md`.
+
 ## Open decisions (interview agenda)
 
 - Outcome + how we know it landed (stranger test)
