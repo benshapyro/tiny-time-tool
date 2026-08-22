@@ -7,6 +7,7 @@
 // test for the IPC glue" convention as `PopoverContainer.tsx`.
 
 import App from "../App";
+import ExportContainer from "../export/ExportContainer";
 import LogContainer from "../log/LogContainer";
 
 // S6 placeholder, same convention as App.tsx/bootstrap.ts: language comes
@@ -17,6 +18,13 @@ function DashboardContainer() {
   return (
     <App locale={LOCALE}>
       <LogContainer />
+      {/* S10: Copy-for-AI + CSV/JSON export, docked under the Log tab's
+          content rather than a separate Dashboard tab — Copy-for-AI acts on
+          "today" (no day-nav needed of its own) and the range export is a
+          couple of inputs and two buttons; a whole new tab would be more
+          chrome than either action needs (Design principle 3, "calm
+          surfaces"). */}
+      <ExportContainer />
     </App>
   );
 }

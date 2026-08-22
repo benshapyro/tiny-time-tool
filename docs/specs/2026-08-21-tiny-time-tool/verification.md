@@ -387,6 +387,79 @@ already applies to Continue/Switch/Stop. When it is showing, the banner **replac
 normal action row rather than layering over it — otherwise a Resume click could open a
 new segment underneath a pending prompt.
 
+## S10 — exports
+
+The anti-Goodhart slice. The spec requires the golden fixtures to be hand-authored from
+the pinned format rules *before* the export code exists, and says that if code and
+fixture disagree, **the code is wrong**.
+
+An implementer writing both the fixture and the code can satisfy that in letter while
+defeating it in substance, and the result is indistinguishable from success. So the
+authorship was split: **the coordinator hand-wrote all six fixtures from the spec and
+committed them in a commit containing no `src/export/` at all**, making the ordering a
+fact in git history rather than a claim in a report. Every duration and total was
+re-derived by an independent computation before being written down.
+
+Confirmed after the slice: the six fixtures are **byte-identical** to the committed
+versions, compared file by file rather than by `git diff` alone.
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 52 | Empty client/project render the pinned `—` (U+2014) | Replaced the em dash with a hyphen | Yes — golden mismatch | Byte-identical | A hyphen is visually near-identical and would never be caught by eye |
+| 53 | The `Total:` line is a real **sum** | Made it take the last row's value instead of accumulating | Yes — golden mismatch | Byte-identical | Passes trivially on a one-row fixture; both fixtures have two rows for this reason |
+| 54 | ISO offset sign convention | Flipped `+`/`-` | Yes — golden mismatch on the CSV | Byte-identical | `-07:00` vs `+07:00` is a 14-hour error that looks like a typo |
+
+A test genuinely shells out to `diff -q` via `execFileSync`, as the spec names, rather
+than only comparing strings in-process.
+
+### Determinism: the timezone had to be pinned, and that was found by authoring
+
+`first_start`/`last_end` are *local-timezone* ISO8601 **with offset**, so the fixtures
+carry `-07:00`. On a UTC CI runner that becomes `+00:00` and **every** golden comparison
+fails, on both platforms, for a reason that reads as a formatting bug and is not.
+
+Pinning `TZ=America/Los_Angeles` in the vitest environment is therefore part of the
+slice, with `timezonePin.test.ts` asserting the pin is actually in effect — offset 420,
+resolved zone, and a fixed instant rendering `09:00` — so it cannot silently lapse into
+machine-dependence.
+
+### A drill that stayed green, and a limitation that is the coordinator's
+
+**Round-half-up did not go red at the golden level.** The implementer investigated
+rather than forcing it, and the diagnosis is correct: **all six fixtures use
+whole-minute durations**, so floor and round-half-up agree on every row. The rule is
+genuinely covered by unit tests (`5m30s → 6`), but the goldens do not exercise it.
+
+That is a weakness in the **coordinator's fixture authoring**, not in the
+implementation — the fixtures should have included a fractional-minute duration. The
+spec already anticipates the gap: landing check **L2** has the landing session
+hand-author a third, held-out fixture, which is the right place to close it, and this
+row is the note to make sure that fixture includes a non-whole-minute duration.
+
+### F10 — native date/time inputs follow the OS locale, and for dates that can mislead
+
+S7 recorded that `<input type="time">` renders in the OS locale rather than the app's,
+so choosing Spanish in Settings on an en-US machine shows AM/PM inside the picker while
+the surface around it is 24-hour. S10's design review reported the export UI clean, and
+its own screenshot shows the same class one step worse: the CSV/JSON range pickers
+render **`08/20/2026`** — US `MM/DD/YYYY` — inside an otherwise fully Spanish surface
+("Desde", "Hasta", "Exportar CSV").
+
+The time case is cosmetic. **The date case is not.** A Spanish-primary user reading
+`08/09/2026` as 9 August when the control means 8 September will export the wrong range
+and not know it. The output would be internally consistent and quietly wrong — the same
+shape as every other finding in this file.
+
+Both share one cause (a native control's display format comes from the OS, with no
+standard HTML way to override it) and one remedy (custom pickers), so they are one
+decision, not two. Recorded together for **S12/S13b**, where the language setting and
+the Spanish layout audit land.
+
+Worth noting for the record: the automated design review looked directly at this and
+called the surface clean. It checked what it was asked to check — truncation, tokens,
+state design, focus — and a US date format inside a Spanish UI is none of those. The
+finding came from reading the screenshot without a checklist.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -413,10 +486,11 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S9. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S10. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **51 of 51** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9),
-  every one re-run by the coordinator rather than inherited from an implementer's report.
+- Checks verified: **54 of 54** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
+  3 S10), every one re-run by the coordinator rather than inherited from an
+  implementer's report.
 - Found broken and repaired: **8** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
@@ -431,6 +505,10 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
   steady for five slices and is the strongest argument for keeping all three practices.
   F7 is the sharpest: the failing check was the coordinator's own, and it had already
   been contradicted once before anyone thought to test the check itself.
+- Open, recorded, awaiting Ben: **F9** (desktop notification clicks are not deliverable
+  by this plugin) and **F10** (native date/time inputs follow the OS locale, so a
+  Spanish user can misread an export range). Neither is a defect in the slice that
+  surfaced it; both are decisions rather than fixes.
 - Open spec-versus-platform conflict: **F9** — the spec assumes clicking a desktop
   notification opens the popover, and `tauri-plugin-notification` 2.3.3 emits no click
   event on desktop at all. Not a defect in S8; a decision for Ben, to be checked first

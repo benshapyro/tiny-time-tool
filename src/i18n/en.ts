@@ -67,6 +67,15 @@ export const en = {
   "away.prompt.message": "Away {elapsed} — add it back?",
   "away.prompt.keep": "Keep",
   "away.prompt.discard": "Discard",
+  "export.sectionLabel": "Export",
+  "export.copyForAi.button": "Copy today for AI",
+  "export.copyForAi.copied": "Copied to clipboard",
+  "export.copyForAi.error": "Couldn't copy — try again",
+  "export.range.startLabel": "From",
+  "export.range.endLabel": "To",
+  "export.range.csvButton": "Export CSV",
+  "export.range.jsonButton": "Export JSON",
+  "export.range.error.invalidOrder": "The start date must be on or before the end date.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

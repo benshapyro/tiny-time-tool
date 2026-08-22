@@ -428,6 +428,50 @@ export class TimerEngine {
     return results;
   }
 
+  /** S10: CSV/JSON export's date-range data source (BUILD_SPEC S10 row:
+   * "CSV by date range"). Same two-query-total shape and the same day-
+   * attribution rule as `entriesForDay` above (local calendar day of the
+   * FIRST segment's start) — never reimplemented, just filtered against a
+   * range instead of a single key. `startDayKey`/`endDayKey` are inclusive,
+   * `YYYY-MM-DD` strings, which compare correctly with plain string
+   * ordering. Results are sorted chronologically by first-segment start so
+   * a multi-day export reads in date order regardless of creation order. */
+  async entriesForRange(startDayKey: string, endDayKey: string): Promise<DayEntry[]> {
+    const entryRows = await this.#driver.select<EntryRow>("SELECT * FROM time_entries ORDER BY created_at ASC");
+    const segmentRows = await this.#driver.select<SegmentRow>("SELECT * FROM segments ORDER BY started_at ASC");
+
+    const segmentsByEntry = new Map<string, Segment[]>();
+    for (const row of segmentRows) {
+      const segment = segmentFromRow(row);
+      const existing = segmentsByEntry.get(segment.entryId);
+      if (existing) {
+        existing.push(segment);
+      } else {
+        segmentsByEntry.set(segment.entryId, [segment]);
+      }
+    }
+
+    const results: DayEntry[] = [];
+    for (const row of entryRows) {
+      const segments = segmentsByEntry.get(row.id);
+      if (!segments || segments.length === 0) continue;
+      const firstSegment = segments[0];
+      if (!firstSegment) continue;
+      const dayKey = entryDayKey(firstSegment.startedAt);
+      if (dayKey >= startDayKey && dayKey <= endDayKey) {
+        results.push({ entry: entryFromRow(row), segments });
+      }
+    }
+
+    results.sort((a, b) => {
+      const aStart = a.segments[0]?.startedAt ?? "";
+      const bStart = b.segments[0]?.startedAt ?? "";
+      return aStart < bStart ? -1 : aStart > bStart ? 1 : 0;
+    });
+
+    return results;
+  }
+
   async entry(entryId: string): Promise<TimeEntry | null> {
     const rows = await this.#driver.select<EntryRow>("SELECT * FROM time_entries WHERE id = ?", [entryId]);
     const row = rows[0];

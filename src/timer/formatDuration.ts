@@ -13,8 +13,16 @@
 // BUILD_SPEC pins for CSV's `duration_minutes`, applied here too so a given
 // number of seconds never displays two different ways across surfaces.
 
+// S10: pulled out of formatDurationHM's body — CSV/JSON's `duration_minutes`
+// column (BUILD_SPEC: "integer, round-half-up") needs the same rounding rule
+// as an INTEGER, not embedded in a "Xh Ym" string. Both surfaces call this
+// one function so a given number of seconds never rounds two different ways.
+export function roundMinutesHalfUp(totalSeconds: number): number {
+  return Math.floor(totalSeconds / 60 + 0.5);
+}
+
 export function formatDurationHM(totalSeconds: number): string {
-  const totalMinutes = Math.floor(totalSeconds / 60 + 0.5);
+  const totalMinutes = roundMinutesHalfUp(totalSeconds);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (hours > 0) {
