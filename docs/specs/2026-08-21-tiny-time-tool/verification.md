@@ -107,6 +107,40 @@ Both were redone correctly and are rows 15 and 18 above.
 by `cargo tree --target … -i`. Only the SQLite backend compiles in. Allowlisted with the
 finding documented inline.
 
+## S3 — global shortcuts
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 19 | Primary pauses a running timer (acceptance sequence) | Replaced `engine.pause()` in the running branch with a no-op | Yes — `expected 'running' to be 'paused'` | Byte-identical | |
+| 20 | Registration failure sets a warning | Guarded the `warnings.set(...)` so failures are swallowed | Yes — `expected false to be true` | Byte-identical | "No silent failure" is the whole point of the slice |
+| 21 | Panel seam fires **only** on idle→running | Deleted the `onPanelOpenRequested?.()` call | Yes — `expected +0 to be 1` | Byte-identical | Guards the S3/S4 interplay rule |
+| 22 | A stray stop press while idle is a no-op, not a thrown error | Made `#handleStop` run unconditionally | Yes — the named no-op test failed | Byte-identical | An `IllegalTransitionError` escaping a live OS handler is the bad outcome |
+| 23 | Pinned default accelerators | Changed `primary` to `CmdOrCtrl+Alt+T` | Yes — `expected 'CmdOrCtrl+Alt+T' to be 'CmdOrCtrl+Shift+Space'` | Byte-identical | See the fake-break note below — the first attempt at this drill was invalid |
+| 24 | `rebind()` actually swaps the accelerator | Removed the assignment of `newAccelerator` | Yes — `expected true to be false` | Byte-identical | The S12 Settings path |
+| 25 | The fake driver's failure simulation is load-bearing | Renamed `failingAccelerators` so simulation is inert | Yes — `expected false to be true` | Byte-identical | Proves the test double drives the tests, rather than decorating them |
+
+### The fake-break trap, caught in the act
+
+The first pass at row 23 **reported the check as unguarded** — the sabotage applied, the
+file changed, and the suite stayed green. That looked like a genuine coverage hole.
+
+It was not. `perl -0p` with no `/g` replaces only the **first** match in the slurped
+file, which was the accelerator string inside a *comment* on line 9. The executable
+constant on line 47 was untouched. The file genuinely changed, so the harness's
+`cmp`-against-backup guard passed it as a valid drill — and it was worthless.
+
+This is exactly the failure this document's first rule names: *"Editing a comment …
+produces a green run that is indistinguishable from a passing test."* The harness could
+detect *a* change but not a **behavioural** change.
+
+Fixed by adding a second guard: the drill now diffs the file with comment lines stripped
+and rejects the drill as invalid if only comments moved. Three further sabotages in the
+same batch were rejected as outright no-ops by the existing `cmp` guard. Of seven
+attempted S3 drills, **four were invalid on the first pass** — and every one of those
+four would have been silently recorded as "verified" by a harness without these guards.
+
+Re-run against the real code, all seven go red for their intended reason.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -133,15 +167,19 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 and S2. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1, S2 and S3. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **18 of 18** (12 in S1, 6 in S2), every one re-run by the coordinator
-  rather than inherited from an implementer's report.
-- Found broken and repaired: **2** — F1 (both Windows zero-network gates vacuous) and
-  F2 (CRLF disabling the Windows test suite). Both from S1; S2 introduced none.
-- Drills rejected as invalid before scoring: **2** (S2) — one no-op sabotage, one that
-  went red for the wrong reason. Both redone. Recorded because a drill harness that
-  cannot reject its own bad drills is the same failure as a check that cannot fail.
+- Checks verified: **25 of 25** (12 in S1, 6 in S2, 7 in S3), every one re-run by the
+  coordinator rather than inherited from an implementer's report.
+- Found broken and repaired: **3** — F1 (both Windows zero-network gates vacuous),
+  F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
+  `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
+  by CI within minutes of the repo going public).
+- Drills rejected as invalid before scoring: **6** — two in S2 (a no-op sabotage and one
+  red for the wrong reason) and four in S3 (three no-ops plus a comment-only "break"
+  that made a real check look unguarded). All redone. Recorded because a drill harness
+  that cannot reject its own bad drills is the same failure as a check that cannot fail;
+  the S3 batch is why the harness now rejects comment-only edits too.
 - Unverifiable so far, with reason:
   - **The production SQLite path.** S2's tests run against a real SQLite file through
     Node's `node:sqlite`; the shipped app uses `tauri-plugin-sql` over Tauri IPC, which

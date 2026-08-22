@@ -5,7 +5,14 @@
       "identifier": "default",
       "windows": ["main"],
       "remote": null,
-      "permissions": ["core:default", "opener:default", "sql:default", "sql:allow-execute"]
+      "permissions": [
+        "core:default",
+        "opener:default",
+        "sql:default",
+        "sql:allow-execute",
+        "global-shortcut:allow-register",
+        "global-shortcut:allow-unregister"
+      ]
     }
   ]
 }

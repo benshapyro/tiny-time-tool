@@ -9,6 +9,10 @@ export const en = {
   "tray.tooltip.idle": "Tiny Time Tool — idle",
   "tray.tooltip.running": "Tiny Time Tool — tracking",
   "tray.tooltip.paused": "Tiny Time Tool — paused",
+  "shortcuts.warning.primaryFailed":
+    "Couldn't set the start/pause/resume shortcut — another app may already be using it. Pick a different one in Settings.",
+  "shortcuts.warning.stopFailed":
+    "Couldn't set the stop shortcut — another app may already be using it. Pick a different one in Settings.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

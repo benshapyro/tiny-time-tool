@@ -34,6 +34,13 @@ pub fn run() {
                 .add_migrations(DB_URL, migrations())
                 .build(),
         )
+        // S3: global shortcuts. No `.with_shortcuts()`/`.with_handler()` here
+        // — the shortcut -> TimerEngine mapping is business logic and lives
+        // in TS (`src/shortcuts/shortcutController.ts`), driven through the
+        // plugin's JS `register`/`unregister` bindings
+        // (`src/shortcuts/tauriShortcutDriver.ts`). Rust only registers the
+        // plugin itself, per the "Rust stays thin" constraint.
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             tray::build_tray(app)?;
             Ok(())
