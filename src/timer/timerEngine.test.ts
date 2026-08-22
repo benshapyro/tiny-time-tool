@@ -222,4 +222,77 @@ describe("TimerEngine", () => {
 
     expect(await engine.durationSeconds(entry.id)).toBe(75 * 60);
   });
+
+  describe("setEntryFields (S4: naming an entry after it has already started — tracking begins at the shortcut press, naming happens later via the quick-entry panel)", () => {
+    it("updates name/client/project on an already-started entry without disturbing its segments", async () => {
+      const driver = trackDriver(dbPath);
+      const clock = fixedClock("2026-08-21T10:00:00.000Z");
+      const engine = await TimerEngine.create(driver, clock.now);
+      const entry = await engine.start(); // no fields yet — matches a bare shortcut press
+      expect(entry.name).toBeNull();
+
+      clock.advanceTo("2026-08-21T10:00:07.000Z"); // naming happens moments later
+      await engine.setEntryFields(entry.id, { name: "Acme onboarding", client: "acme", project: "rollout" });
+
+      const updated = await engine.entry(entry.id);
+      expect(updated).toMatchObject({ name: "Acme onboarding", client: "acme", project: "rollout" });
+
+      // The segment recorded at start() is untouched by naming.
+      const segments = await engine.segmentsFor(entry.id);
+      expect(segments).toHaveLength(1);
+      expect(segments[0]?.startedAt).toBe("2026-08-21T10:00:00.000Z");
+    });
+
+    it("setting an empty/null name explicitly clears it back to NULL (Enter with empty input skips naming)", async () => {
+      const driver = trackDriver(dbPath);
+      const engine = await TimerEngine.create(driver, () => new Date("2026-08-21T10:00:00.000Z"));
+      const entry = await engine.start({ name: "placeholder" });
+
+      await engine.setEntryFields(entry.id, { name: null, client: null, project: null });
+
+      const updated = await engine.entry(entry.id);
+      expect(updated?.name).toBeNull();
+      expect(updated?.client).toBeNull();
+      expect(updated?.project).toBeNull();
+    });
+  });
+
+  describe("recentTaskNames (S4: autocomplete data source)", () => {
+    it("returns distinct non-null names, most recently created first, capped at the given limit", async () => {
+      const driver = trackDriver(dbPath);
+      const clock = fixedClock("2026-08-21T09:00:00.000Z");
+      const engine = await TimerEngine.create(driver, clock.now);
+
+      await engine.start({ name: "Acme onboarding" });
+      await engine.stop();
+      clock.advanceTo("2026-08-21T09:05:00.000Z");
+      await engine.start({ name: "Acme deep-dive" });
+      await engine.stop();
+      clock.advanceTo("2026-08-21T09:10:00.000Z");
+      await engine.start({ name: "Beta review" });
+      await engine.stop();
+      clock.advanceTo("2026-08-21T09:15:00.000Z");
+      await engine.start({ name: "Acme onboarding" }); // duplicate name — not repeated
+      await engine.stop();
+      clock.advanceTo("2026-08-21T09:20:00.000Z");
+      await engine.start(); // null name — excluded
+      await engine.stop();
+
+      const names = await engine.recentTaskNames(10);
+      expect(names).toEqual(["Acme onboarding", "Beta review", "Acme deep-dive"]);
+    });
+
+    it("caps results at the given limit", async () => {
+      const driver = trackDriver(dbPath);
+      const clock = fixedClock("2026-08-21T09:00:00.000Z");
+      const engine = await TimerEngine.create(driver, clock.now);
+      for (const name of ["One", "Two", "Three"]) {
+        await engine.start({ name });
+        await engine.stop();
+        clock.advanceTo(new Date(clock.now().getTime() + 60_000).toISOString());
+      }
+      const names = await engine.recentTaskNames(2);
+      expect(names).toHaveLength(2);
+    });
+  });
 });

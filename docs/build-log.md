@@ -209,3 +209,82 @@ space`): verified red against the old guard with exactly one failure on the inte
 assertion, green against the new one. 43 → 44 tests.
 
 Recorded as rows in `verification.md`: these are the run's real findings so far.
+
+## S4 — focus-grab spike (2026-08-22)
+
+BUILD_SPEC S4 requires proving, before the rest of the slice is built, that the quick-entry
+panel receives keystrokes immediately when summoned over a frontmost third-party app. This
+session has **no macOS Accessibility grant** for the process running its shell — `osascript`
+confirmed with `System Events`: `keystroke "hello"` fails with *"osascript is not allowed to
+send keystrokes" (-1002)*, and reading the UI tree (`get name of every window`) fails with
+*"osascript is not allowed assistive access" (-1728)*. Neither can be granted without a human
+clicking through System Settings → Privacy & Security → Accessibility, which this session
+cannot do. **A literal synthesized keypress was not possible here.**
+
+Given that constraint, the spike was scoped to prove the two facts a physical keypress
+actually depends on, using signals that don't require Accessibility:
+
+1. **macOS app/window activation** — does `panel.show()` + `panel.setFocus()` on an
+   `alwaysOnTop: true, decorations: false, visible: false` window (declared in
+   `src-tauri/tauri.conf.json`, label `"panel"`) actually take frontmost/key-window status
+   away from another app, with zero user click? Queried via
+   `System Events → name of first process whose frontmost is true` (an Automation-only
+   query already permitted, no Accessibility needed).
+2. **DOM/webview focus** — at the instant the OS window becomes key, is the panel's
+   `<input aria-label="Quick entry" autoFocus>` genuinely `document.activeElement`, with
+   `document.hasFocus() === true`? Reported by the panel's own JS via a temporary
+   `debug_write` Tauri command that appended to a log file — no Accessibility needed, pure
+   IPC the app already has.
+
+**Procedure and result**, reproduced from a clean state:
+```
+hide the panel                                    → hide=Ok(())
+activate TextEdit, new empty doc, confirm frontmost → "TextEdit"
+clear log; touch trigger → panel.show()+panel.setFocus()
+                                                    → show=Ok(()) set_focus=Ok(())
+frontmost process after                            → "tiny-time-tool"
+panel's own JS, at the native focus event:
+  window focus event: document.hasFocus()=true activeElement=INPUT[aria-label=Quick entry]
+TextEdit's document text                            → unchanged (empty)
+```
+Both facts hold together: the OS actually moved keyboard ownership from TextEdit to the app
+(fact 1, confirmed by an independent OS query, not the app's own claim), and at that exact
+moment the input already held DOM focus (fact 2). macOS routes physical key events to the key
+window's first responder, and WKWebView routes them to the focused DOM element — both links
+in that chain are now proven live. This is not a substitute for a literal keypress test, and
+the true "type a character and see it land" step is deferred to the S14 manual-check gate (and
+the L3 landing check) as the spec's own testing-strategy section anticipates for exactly this
+kind of native-input case — but it is a real result, not an assumption: **the spike passed**,
+scoped as above. **Windows behavior remains untested here** — BUILD_SPEC already names that a
+residual risk deferred to the S14 manual check on Ben's Windows device.
+
+**A real, load-bearing defect was found and fixed while running the spike.** S4 is the first
+slice whose frontend bundle actually imports `TimerEngine` (via a new `src/app/bootstrap.ts`
+that wires it into the running app — S2/S3 built and tested it, but nothing ever *ran* it
+outside Vitest). `src/timer/timerEngine.ts` imported `randomUUID` from `"node:crypto"` — a
+Node.js builtin. That resolves fine under Vitest (a Node test environment) and type-checks
+fine under `tsc` (`@types/node` provides it), but **breaks the moment it reaches a real
+browser/webview runtime**: importing it in the real app silently aborted the entire `main.tsx`
+module graph before a single line of the importing module ran (ES module semantics — a
+throwing import blocks the importer's own top-level code), so *neither* window's React tree
+rendered and no `invoke()` call ever reached Rust. Diagnosed by adding an unconditional
+`debug_write` call as the very first statement of a minimal, import-free `main.tsx`: it
+worked; reintroducing the real imports one at a time isolated it to `bootstrap.ts` →
+`timerEngine.ts` → `node:crypto`. Fixed by switching to the standard `crypto.randomUUID()`
+(Web Crypto API), which is available identically in the real webview, in Vitest/jsdom, and in
+plain Node — no environment-specific branching needed. `npm test` (84/84) and `cargo test`
+(9/9) both still green after the fix; this defect had no test coverage before because nothing
+before S4 ever loaded `timerEngine.ts` outside a test runner.
+
+**Also wired live for the first time, verified to compile and run (not exercised by a shortcut
+press yet, pending the S14 manual gate):** `src/app/bootstrap.ts` constructs the real
+`TimerEngine` + `ShortcutController` against the production Tauri plugins and connects S3's
+`onPanelOpenRequested` seam to `panel.show()`/`panel.setFocus()`, and `onTrayStateChange` to a
+new `set_tray_state` Tauri command wrapping the S1 tray code that had been dead code since S1
+(`src-tauri/src/lib.rs`, `src-tauri/src/tray.rs`'s `TrayState` now derives `serde::Deserialize`
+with `rename_all = "lowercase"` to match the TS union on the wire).
+
+All spike-only scaffolding (the `debug_write` command, the file-poll trigger thread, the
+diagnostic `useEffect`/`onFocus` logging in the panel component) was removed after the result
+was recorded; only the permanent wiring (`bootstrap.ts`, the panel window config/capabilities,
+`set_tray_state`) remains.

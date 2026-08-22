@@ -25,11 +25,14 @@ use tauri::{
 pub const MENU_ID_OPEN_DASHBOARD: &str = "open_dashboard";
 pub const MENU_ID_QUIT: &str = "quit";
 
-/// Mirrors `TrayState` in `src/tray/trayState.ts`. `Running`/`Paused` aren't
-/// constructed yet outside tests — S2 wires the timer state machine that
-/// drives real transitions via `set_tray_state`.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Mirrors `TrayState` in `src/tray/trayState.ts`. Constructed from the
+/// `set_tray_state` Tauri command (`lib.rs`), which `src/app/bootstrap.ts`
+/// invokes from `ShortcutController`'s `onTrayStateChange` seam — the
+/// lowercase `serde` rename matches the TS union (`"idle" | "running" |
+/// "paused"`) exactly, so the wire value needs no translation on either
+/// side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TrayState {
     Idle,
     Running,
@@ -152,8 +155,6 @@ pub fn build_tray(app: &App<Wry>) -> tauri::Result<()> {
 /// is guarded to `target_os = "macos"` rather than relying on the
 /// underlying crate silently ignoring it. The tooltip (`state.tooltip()`)
 /// is set on every platform.
-#[allow(dead_code)]
-#[allow(unused_variables)]
 pub fn set_tray_state(
     tray: &tauri::tray::TrayIcon<Wry>,
     state: TrayState,

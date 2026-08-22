@@ -20,7 +20,6 @@
 // second `TimerEngine.create` against the same database file, with no
 // coordination with the first, must reconstruct the same state.
 
-import { randomUUID } from "node:crypto";
 import type { SqlDriver } from "./sqlDriver";
 import type { Segment, TimeEntry } from "./types";
 import { totalDurationSeconds } from "./duration";
@@ -124,7 +123,7 @@ export class TimerEngine {
     }
     const now = this.#clock();
     const entry: TimeEntry = {
-      id: randomUUID(),
+      id: crypto.randomUUID(),
       name: fields.name ?? null,
       client: fields.client ?? null,
       project: fields.project ?? null,
@@ -135,7 +134,7 @@ export class TimerEngine {
       [entry.id, entry.name, entry.client, entry.project, entry.createdAt],
     );
 
-    const segmentId = randomUUID();
+    const segmentId = crypto.randomUUID();
     await this.#driver.execute(
       "INSERT INTO segments (id, entry_id, started_at, ended_at) VALUES (?, ?, ?, NULL)",
       [segmentId, entry.id, entry.createdAt],
@@ -162,7 +161,7 @@ export class TimerEngine {
       throw new IllegalTransitionError("resume", this.#state);
     }
     const now = this.#clock().toISOString();
-    const segmentId = randomUUID();
+    const segmentId = crypto.randomUUID();
     await this.#driver.execute(
       "INSERT INTO segments (id, entry_id, started_at, ended_at) VALUES (?, ?, ?, NULL)",
       [segmentId, this.#currentEntryId, now],
@@ -182,6 +181,32 @@ export class TimerEngine {
     this.#state = "idle";
     this.#currentEntryId = null;
     this.#openSegmentId = null;
+  }
+
+  /** S4: names/tags an entry that has already started — the quick-entry
+   * panel's Enter commit. Tracking begins at the shortcut press (`start()`,
+   * with no fields); naming happens moments later here, so this never
+   * touches segments/timestamps, only the entry row's display fields.
+   * Legal in any state (the named entry need not still be the current
+   * one — the Switch flow commits the outgoing entry's text after it has
+   * already been stopped). */
+  async setEntryFields(entryId: string, fields: StartFields): Promise<void> {
+    await this.#driver.execute("UPDATE time_entries SET name = ?, client = ?, project = ? WHERE id = ?", [
+      fields.name ?? null,
+      fields.client ?? null,
+      fields.project ?? null,
+      entryId,
+    ]);
+  }
+
+  /** S4: autocomplete data source — distinct non-null names, most recently
+   * created first, capped at `limit`. */
+  async recentTaskNames(limit: number): Promise<string[]> {
+    const rows = await this.#driver.select<{ name: string }>(
+      "SELECT name, MAX(created_at) as latest FROM time_entries WHERE name IS NOT NULL GROUP BY name ORDER BY latest DESC LIMIT ?",
+      [limit],
+    );
+    return rows.map((row) => row.name);
   }
 
   async entry(entryId: string): Promise<TimeEntry | null> {

@@ -13,6 +13,10 @@ export const en = {
     "Couldn't set the start/pause/resume shortcut — another app may already be using it. Pick a different one in Settings.",
   "shortcuts.warning.stopFailed":
     "Couldn't set the stop shortcut — another app may already be using it. Pick a different one in Settings.",
+  "panel.inputLabel": "Quick entry",
+  "panel.placeholder": "Task name, @client, #project",
+  "panel.switchNotice": "Will stop: {name} ({elapsed})",
+  "panel.suggestionsLabel": "Suggestions",
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -262,6 +262,96 @@ describe("tray feedback seam (2026-08-22 amendment: pause is visible, not silent
   });
 });
 
+describe("onBeforePause seam (S4: primary press while the quick-entry panel is open commits its text, then pauses)", () => {
+  it("fully awaits a slow onBeforePause — pause() cannot race ahead of a still-pending commit", async () => {
+    const sqlDriver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(sqlDriver, () => new Date("2026-08-21T09:00:00.000Z"));
+    const shortcutDriver = createFakeShortcutDriver();
+    let resolveBeforePause: (() => void) | undefined;
+    const beforePausePromise = new Promise<void>((resolve) => {
+      resolveBeforePause = resolve;
+    });
+    const controller = new ShortcutController({
+      driver: shortcutDriver,
+      engine,
+      onBeforePause: () => beforePausePromise,
+    });
+    await controller.registerAll();
+    await shortcutDriver.press(DEFAULT_ACCELERATORS.primary); // start
+
+    const pausePressPromise = shortcutDriver.press(DEFAULT_ACCELERATORS.primary); // blocks on onBeforePause
+    // Flush a few microtask turns — a fire-and-forget (not awaited)
+    // onBeforePause would let pause() run in this window; a correctly
+    // awaited one keeps the engine "running" until we resolve it below.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(engine.state).toBe("running");
+
+    resolveBeforePause?.();
+    await pausePressPromise;
+    expect(engine.state).toBe("paused");
+  });
+
+  it("calls onBeforePause and awaits it before the running -> paused transition takes effect", async () => {
+    const sqlDriver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(sqlDriver, () => new Date("2026-08-21T09:00:00.000Z"));
+    const shortcutDriver = createFakeShortcutDriver();
+    const calls: string[] = [];
+    const controller = new ShortcutController({
+      driver: shortcutDriver,
+      engine,
+      onBeforePause: async () => {
+        calls.push("before-pause");
+        // The engine must still be "running" here — onBeforePause fires
+        // strictly before pause(), so a panel-commit callback can still
+        // read/act on the current (not-yet-paused) entry.
+        expect(engine.state).toBe("running");
+      },
+    });
+    await controller.registerAll();
+
+    await shortcutDriver.press(DEFAULT_ACCELERATORS.primary); // start
+    await shortcutDriver.press(DEFAULT_ACCELERATORS.primary); // pause
+    expect(calls).toEqual(["before-pause"]);
+    expect(engine.state).toBe("paused");
+  });
+
+  it("does NOT call onBeforePause on start (idle -> running) or resume (paused -> running)", async () => {
+    const sqlDriver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(sqlDriver, () => new Date("2026-08-21T09:00:00.000Z"));
+    const shortcutDriver = createFakeShortcutDriver();
+    let calls = 0;
+    const controller = new ShortcutController({
+      driver: shortcutDriver,
+      engine,
+      onBeforePause: () => {
+        calls += 1;
+      },
+    });
+    await controller.registerAll();
+
+    await shortcutDriver.press(DEFAULT_ACCELERATORS.primary); // idle -> running
+    expect(calls).toBe(0);
+    await shortcutDriver.press(DEFAULT_ACCELERATORS.primary); // running -> paused
+    expect(calls).toBe(1);
+    await shortcutDriver.press(DEFAULT_ACCELERATORS.primary); // paused -> running (resume)
+    expect(calls).toBe(1); // unchanged
+  });
+
+  it("works with no onBeforePause configured at all (optional seam, no crash)", async () => {
+    const sqlDriver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(sqlDriver, () => new Date("2026-08-21T09:00:00.000Z"));
+    const shortcutDriver = createFakeShortcutDriver();
+    const controller = new ShortcutController({ driver: shortcutDriver, engine });
+    await controller.registerAll();
+
+    await shortcutDriver.press(DEFAULT_ACCELERATORS.primary);
+    await expect(shortcutDriver.press(DEFAULT_ACCELERATORS.primary)).resolves.toBeUndefined();
+    expect(engine.state).toBe("paused");
+  });
+});
+
 describe("failed registration surfaces a visible warning (no silent failure)", () => {
   it("sets a warning naming the accelerator that failed to register; the other accelerator is unaffected", async () => {
     const sqlDriver = trackDriver(dbPath);

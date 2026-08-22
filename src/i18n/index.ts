@@ -12,6 +12,19 @@ export function t(locale: Locale, key: TranslationKey): string {
   return catalogs[locale][key];
 }
 
+/** S4: substitutes `{placeholder}` tokens in a translated string (e.g. the
+ * quick-entry panel's switch notice, "Will stop: {name} ({elapsed})") —
+ * this project's catalogs have no interpolation of their own, so this is a
+ * small, generic helper rather than one-off string concatenation at every
+ * call site. A placeholder with no matching key is left untouched (never
+ * throws) — a missing param is a caller bug to notice in review, not a
+ * runtime crash in a live shortcut handler. */
+export function interpolate(template: string, params: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+    Object.prototype.hasOwnProperty.call(params, key) ? params[key]! : match,
+  );
+}
+
 // Locale-aware short-date formatter, pinned by BUILD_SPEC for the null-name
 // auto-name display: en "MMM d" (e.g. "Aug 21"), es "d MMM" (e.g. "21 ago").
 const shortDateFormatters: Record<Locale, Intl.DateTimeFormat> = {

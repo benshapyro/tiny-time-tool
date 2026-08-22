@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { en } from "./en";
 import { es } from "./es";
-import { formatDisplayTime, formatFixedTime, formatShortDate, t } from "./index";
+import { formatDisplayTime, formatFixedTime, formatShortDate, interpolate, t } from "./index";
 
 describe("i18n smoke", () => {
   it("renders distinct expected literals for the same key in en and es", () => {
@@ -83,6 +83,48 @@ describe("shortcut registration-failure warnings (S3, both en and es required)",
       expect(text).not.toMatch(/\bshortcut\b/i); // no leftover English noun
       expect(text).toMatch(/atajo/i); // idiomatic Spanish term actually used
     }
+  });
+});
+
+describe("interpolate (S4: placeholder substitution for the switch-notice string)", () => {
+  it("replaces every named placeholder with its value", () => {
+    expect(interpolate("Will stop: {name} ({elapsed})", { name: "Acme onboarding", elapsed: "5:00" })).toBe(
+      "Will stop: Acme onboarding (5:00)",
+    );
+  });
+
+  it("leaves a placeholder with no matching key untouched, rather than throwing", () => {
+    expect(interpolate("Hello {name}", {})).toBe("Hello {name}");
+  });
+
+  it("substitutes the same placeholder every time it appears", () => {
+    expect(interpolate("{x} and {x}", { x: "a" })).toBe("a and a");
+  });
+});
+
+describe("S4 quick-entry panel strings (both locales required, es idiomatic)", () => {
+  it("panel.inputLabel and panel.placeholder render distinct non-empty literals in en and es", () => {
+    for (const key of ["panel.inputLabel", "panel.placeholder"] as const) {
+      const enText = t("en", key);
+      const esText = t("es", key);
+      expect(enText.length).toBeGreaterThan(0);
+      expect(esText.length).toBeGreaterThan(0);
+      expect(enText).not.toBe(esText);
+    }
+  });
+
+  it("panel.switchNotice carries both the {name} and {elapsed} placeholders in en and es", () => {
+    for (const locale of ["en", "es"] as const) {
+      const text = t(locale, "panel.switchNotice");
+      expect(text).toContain("{name}");
+      expect(text).toContain("{elapsed}");
+    }
+  });
+
+  it("es panel strings are idiomatic — no raw 'panel' calque, no leftover English", () => {
+    const esNotice = t("es", "panel.switchNotice");
+    expect(esNotice).not.toMatch(/\bwill stop\b/i);
+    expect(esNotice).toMatch(/detendrá/i);
   });
 });
 

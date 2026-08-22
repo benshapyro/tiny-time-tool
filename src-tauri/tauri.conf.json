@@ -16,6 +16,21 @@
         "title": "Tiny Time Tool",
         "width": 800,
         "height": 600
+      },
+      {
+        "label": "panel",
+        "title": "Quick Entry",
+        "url": "index.html",
+        "width": 480,
+        "height": 160,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "center": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "focus": false,
+        "shadow": true
       }
     ],
     "security": {
