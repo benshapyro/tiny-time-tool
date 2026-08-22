@@ -133,15 +133,15 @@ earlier.
    targets (`aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc`):
    **absent from every one**; it appears only under `--target all`. Allowlisted with
    this finding documented inline. Not a zero-network hole.
-2. **Elapsed-format is an inferred call — needs Ben.** `formatElapsed` renders `M:SS`
-   under an hour and `H:MM:SS` at or over. The spec pins the pause glyph and the
-   `Xh Ym` *duration* format (Copy-for-AI), but never the *ticking* format. The
-   menu-bar convention was chosen. S5's popover has a live ticking timer too, so the
-   two must agree — confirm before S5 styles it.
-3. **Spanish quality nit** — `tray.tooltip.running` is `"rastreando"`, which reads as
-   tracing/following rather than a timer running. `"en curso"` is more idiomatic.
-   Not an S1 blocker; belongs to the S13a/S13b Spanish review, where ST7's
-   "first-class, not translated-and-hoped" bar applies.
+2. ~~**Elapsed-format is an inferred call — needs Ben.**~~ **RESOLVED 2026-08-22.**
+   Ben pinned the implementer's choice as canonical (a872e4f, decisions #52):
+   ticking timer is `M:SS` under one hour, `H:MM:SS` at and beyond, **tray title and
+   popover must agree**, paused shows `⏸ ` plus the same format. S5 inherits this
+   rather than choosing.
+3. ~~**Spanish quality nit** — `tray.tooltip.running` is `"rastreando"`.~~
+   **RESOLVED 2026-08-22.** Ben pinned it in the spec (a872e4f, decisions #53):
+   running state is `en curso`, never `rastreando`, and S13a now reviews *idiom*,
+   not just key coverage. Applied to `src/i18n/es.ts`.
 4. **Tray art is placeholder-quality** — hand-generated PNGs (ring / disc / pause bars)
    via a small zlib encoder, since no image tooling exists in the sandbox. Genuinely
    distinguishable in silhouette and valid as template images, but they need a design

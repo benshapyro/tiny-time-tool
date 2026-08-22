@@ -8,6 +8,6 @@ export const es: Record<TranslationKey, string> = {
   "tray.openDashboard": "Abrir panel",
   "tray.quit": "Salir",
   "tray.tooltip.idle": "Tiny Time Tool — inactivo",
-  "tray.tooltip.running": "Tiny Time Tool — rastreando",
+  "tray.tooltip.running": "Tiny Time Tool — en curso",
   "tray.tooltip.paused": "Tiny Time Tool — en pausa",
 };
