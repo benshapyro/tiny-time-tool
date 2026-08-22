@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { entryDayKey } from "./dayAttribution";
-import { createNodeSqliteDriver } from "./nodeSqliteDriver";
+import { closeTrackedDrivers, trackDriver } from "./testSqliteSupport";
 import { IllegalTransitionError, TimerEngine } from "./timerEngine";
 
 let tempDir: string;
@@ -21,7 +21,8 @@ beforeEach(() => {
   dbPath = join(tempDir, "test.db");
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTrackedDrivers();
   rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -38,7 +39,7 @@ function fixedClock(iso: string) {
 
 describe("TimerEngine", () => {
   it("pinned fixture sequence: start(10:00) -> pause(10:20) -> resume(10:30) -> stop(10:45) yields 35m across two segments", async () => {
-    const driver = createNodeSqliteDriver(dbPath);
+    const driver = trackDriver(dbPath);
     const clock = fixedClock("2026-08-21T10:00:00.000Z");
     const engine = await TimerEngine.create(driver, clock.now);
 
@@ -72,7 +73,7 @@ describe("TimerEngine", () => {
   });
 
   it("duration = sum of segments, with an open segment counted to `now` from the injected clock", async () => {
-    const driver = createNodeSqliteDriver(dbPath);
+    const driver = trackDriver(dbPath);
     const clock = fixedClock("2026-08-21T09:00:00.000Z");
     const engine = await TimerEngine.create(driver, clock.now);
 
@@ -90,19 +91,19 @@ describe("TimerEngine", () => {
 
   describe("illegal transitions (documented semantics: start only from idle, pause only from running, resume only from paused, stop from running or paused)", () => {
     it("rejects resume() from idle", async () => {
-      const driver = createNodeSqliteDriver(dbPath);
+      const driver = trackDriver(dbPath);
       const engine = await TimerEngine.create(driver, () => new Date("2026-08-21T09:00:00.000Z"));
       await expect(engine.resume()).rejects.toThrow(IllegalTransitionError);
     });
 
     it("rejects pause() from idle", async () => {
-      const driver = createNodeSqliteDriver(dbPath);
+      const driver = trackDriver(dbPath);
       const engine = await TimerEngine.create(driver, () => new Date("2026-08-21T09:00:00.000Z"));
       await expect(engine.pause()).rejects.toThrow(IllegalTransitionError);
     });
 
     it("rejects pause() when already paused", async () => {
-      const driver = createNodeSqliteDriver(dbPath);
+      const driver = trackDriver(dbPath);
       const clock = fixedClock("2026-08-21T09:00:00.000Z");
       const engine = await TimerEngine.create(driver, clock.now);
       await engine.start();
@@ -111,7 +112,7 @@ describe("TimerEngine", () => {
     });
 
     it("rejects start() while running", async () => {
-      const driver = createNodeSqliteDriver(dbPath);
+      const driver = trackDriver(dbPath);
       const clock = fixedClock("2026-08-21T09:00:00.000Z");
       const engine = await TimerEngine.create(driver, clock.now);
       await engine.start();
@@ -119,7 +120,7 @@ describe("TimerEngine", () => {
     });
 
     it("rejects start() while paused", async () => {
-      const driver = createNodeSqliteDriver(dbPath);
+      const driver = trackDriver(dbPath);
       const clock = fixedClock("2026-08-21T09:00:00.000Z");
       const engine = await TimerEngine.create(driver, clock.now);
       await engine.start();
@@ -128,13 +129,13 @@ describe("TimerEngine", () => {
     });
 
     it("rejects stop() from idle", async () => {
-      const driver = createNodeSqliteDriver(dbPath);
+      const driver = trackDriver(dbPath);
       const engine = await TimerEngine.create(driver, () => new Date("2026-08-21T09:00:00.000Z"));
       await expect(engine.stop()).rejects.toThrow(IllegalTransitionError);
     });
 
     it("allows stop() directly from paused (no resume required)", async () => {
-      const driver = createNodeSqliteDriver(dbPath);
+      const driver = trackDriver(dbPath);
       const clock = fixedClock("2026-08-21T09:00:00.000Z");
       const engine = await TimerEngine.create(driver, clock.now);
       const entry = await engine.start();
@@ -148,7 +149,7 @@ describe("TimerEngine", () => {
 
   it("rehydrates a running entry from disk when a fresh engine is constructed against the same database file", async () => {
     const clock1 = fixedClock("2026-08-21T09:00:00.000Z");
-    const driver1 = createNodeSqliteDriver(dbPath);
+    const driver1 = trackDriver(dbPath);
     const engine1 = await TimerEngine.create(driver1, clock1.now);
     const entry = await engine1.start({ name: "Deep work" });
     clock1.advanceTo("2026-08-21T09:05:00.000Z");
@@ -157,7 +158,7 @@ describe("TimerEngine", () => {
     // references them again.
 
     const clock2 = fixedClock("2026-08-21T09:18:00.000Z");
-    const driver2 = createNodeSqliteDriver(dbPath);
+    const driver2 = trackDriver(dbPath);
     const engine2 = await TimerEngine.create(driver2, clock2.now);
 
     expect(engine2.state).toBe("running");
@@ -167,20 +168,20 @@ describe("TimerEngine", () => {
 
   it("rehydrates idle (no open segment) as idle, not running", async () => {
     const clock = fixedClock("2026-08-21T09:00:00.000Z");
-    const driver1 = createNodeSqliteDriver(dbPath);
+    const driver1 = trackDriver(dbPath);
     const engine1 = await TimerEngine.create(driver1, clock.now);
     await engine1.start();
     clock.advanceTo("2026-08-21T09:10:00.000Z");
     await engine1.stop();
 
-    const driver2 = createNodeSqliteDriver(dbPath);
+    const driver2 = trackDriver(dbPath);
     const engine2 = await TimerEngine.create(driver2, () => new Date("2026-08-21T09:15:00.000Z"));
     expect(engine2.state).toBe("idle");
     expect(engine2.currentEntryId).toBeNull();
   });
 
   it("stores name: null as NULL in the database — never bakes in the display auto-name", async () => {
-    const driver = createNodeSqliteDriver(dbPath);
+    const driver = trackDriver(dbPath);
     const clock = fixedClock("2026-08-21T09:00:00.000Z");
     const engine = await TimerEngine.create(driver, clock.now);
     const entry = await engine.start(); // no name/client/project given
@@ -200,7 +201,7 @@ describe("TimerEngine", () => {
   });
 
   it("BUILD_SPEC overnight fixture: 23:30 start -> 00:45 stop belongs only to the start day, duration 1h 15m", async () => {
-    const driver = createNodeSqliteDriver(dbPath);
+    const driver = trackDriver(dbPath);
     const start = new Date(2026, 7, 21, 23, 30, 0);
     const end = new Date(2026, 7, 22, 0, 45, 0);
     const clock = fixedClock(start.toISOString());
