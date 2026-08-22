@@ -300,6 +300,56 @@ day they deliberately opened would be a different bug rather than a fix.
 - **The undo toast has no auto-dismiss timer** — it persists until acted on, is replaced
   by a second delete, or is cleared by day navigation.
 
+## S8 — reminders
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 43 | **Exactly one** nudge at the interval — fires at all | `<` → `<=` in the interval comparison | Yes — `expected +0 to be 1` | Byte-identical | The headline acceptance check, broken in the "too few" direction |
+| 44 | **Exactly one** nudge — no boundary re-fire | Stopped advancing the last-nudge mark before firing | Yes — `expected 3 to be 1` | Byte-identical | The "too many" direction. Both are needed: a check that only proves ≥1 would pass a nudge storm |
+| 45 | No nudge while **paused** | Removed the `state !== "running"` guard | Yes — `expected 1 to be +0` | Byte-identical | See the note below — this drill was initially green |
+| 46 | `reminder.minutes = 0` means off | `<= 0` → `< 0` | Yes — `expected 1 to be +0` | Byte-identical | |
+| 47 | The registered click callback opens the popover | Removed the `onOpenPopover` call | Yes — `expected "vi.fn()" to be called 1 times, but got 0` | Byte-identical | Tests the app's own wiring; see F9 for whether the OS ever invokes it |
+
+### A drill that stayed green, and what it was actually saying
+
+The implementer's first attempt at row 45 weakened the running-state guard and **all 19
+tests stayed green**. Rather than force the drill red, it investigated and found the
+cause: the existing paused test paused at 50 minutes, *under* the 60-minute interval, so
+the elapsed arithmetic alone suppressed the nudge and the state guard was never
+load-bearing. It added a case that runs past the interval and *then* pauses, which only
+passes if the guard itself works, and re-ran the same sabotage — genuinely red.
+
+This is the behaviour the trap list asks for: a drill that will not go red is evidence
+about the test, not an obstacle to the drill.
+
+### F9 — the spec assumes a desktop notification click that this plugin cannot deliver
+
+`BUILD_SPEC`'s gotcha says notification **action buttons** are mobile-only and that
+"clicking one opens the popover". The second half does not hold for
+`tauri-plugin-notification` 2.3.3 on desktop, verified at the mechanism rather than from
+docs:
+
+- The installed crate's `src/desktop.rs` exposes exactly `init`, `show`, `builder`,
+  `request_permission`, `permission_state`, `body`, `title`, `icon`, `sound`, `notify`.
+  There is **no click, action, or activation handling anywhere in the crate's Rust**.
+- The JS `onAction(cb)` subscribes to a plugin event named `actionPerformed`.
+- That event string appears nowhere in the crate's Rust source — it is emitted only from
+  the iOS and Android backends.
+
+So on macOS and Windows, `onAction()` registers a listener for an event that is never
+fired. Clicking the notification will do nothing.
+
+**This is not a defect in S8.** The controller wiring is correct and independently
+drilled (row 47), the click path is isolated to one file
+(`src/reminders/tauriNotificationDriver.ts`), and `onAction` is the only click-related
+API the plugin exposes. The feature also degrades gracefully: the nudge still appears,
+and the popover remains reachable by tray click or shortcut.
+
+It is a **spec-versus-platform conflict for Ben to settle**, and it must be the *first*
+thing checked at S14 — before the "calm nudge" rubric, because if a real click does
+nothing the remedy is a different mechanism (a Rust-side click delegate, or a different
+notification path), which is an architecture decision rather than a bug fix.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -326,10 +376,10 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S7. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S8. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **42 of 42** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7), every one
-  re-run by the coordinator rather than inherited from an implementer's report.
+- Checks verified: **47 of 47** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8), every
+  one re-run by the coordinator rather than inherited from an implementer's report.
 - Found broken and repaired: **8** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
@@ -344,6 +394,10 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
   steady for five slices and is the strongest argument for keeping all three practices.
   F7 is the sharpest: the failing check was the coordinator's own, and it had already
   been contradicted once before anyone thought to test the check itself.
+- Open spec-versus-platform conflict: **F9** — the spec assumes clicking a desktop
+  notification opens the popover, and `tauri-plugin-notification` 2.3.3 emits no click
+  event on desktop at all. Not a defect in S8; a decision for Ben, to be checked first
+  at S14.
 - Drills rejected as invalid before scoring: **6** — two in S2 (a no-op sabotage and one
   red for the wrong reason) and four in S3 (three no-ops plus a comment-only "break"
   that made a real check look unguarded). All redone. Recorded because a drill harness

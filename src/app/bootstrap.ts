@@ -64,6 +64,9 @@ import { PopoverController } from "../popover/popoverController";
 import { DEFAULT_ACCELERATORS, ShortcutController } from "../shortcuts/shortcutController";
 import { createTauriShortcutDriver } from "../shortcuts/tauriShortcutDriver";
 import { consumeFirstLaunch } from "./firstLaunchFlag";
+import { ReminderController } from "../reminders/reminderController";
+import { getReminderMinutes } from "../reminders/reminderSettings";
+import { createTauriNotificationDriver } from "../reminders/tauriNotificationDriver";
 import { createTauriSqlDriver } from "../timer/tauriSqlDriver";
 import { TimerEngine } from "../timer/timerEngine";
 
@@ -83,6 +86,7 @@ export interface Bootstrapped {
   panel: QuickEntryController;
   popover: PopoverController;
   dashboard: LogController;
+  reminders: ReminderController;
 }
 
 let bootstrapped: Promise<Bootstrapped> | null = null;
@@ -305,6 +309,31 @@ async function run(): Promise<Bootstrapped> {
     void togglePopover();
   });
 
+  // S8: reminders. Persisted `reminder.minutes` is read once at boot (S12
+  // will add live Settings UI on top of the same `reminderSettings.ts`
+  // seam this reads/writes — see that module's doc comment). Clicking a
+  // nudge opens the popover via the same `showPopover()` seam the tray
+  // icon and first-launch auto-open already use below — reminders don't
+  // duplicate that behaviour, they trigger it.
+  const reminderMinutes = await getReminderMinutes(sqlDriver);
+  const reminders = new ReminderController({
+    engine,
+    driver: createTauriNotificationDriver(),
+    locale: LOCALE,
+    minutes: reminderMinutes,
+    onOpenPopover: () => showPopover(),
+  });
+  await reminders.registerClickHandler();
+  // Polled, not event-driven: nothing in TimerEngine emits on the passage
+  // of time. 30s matches the cadence BUILD_SPEC anticipates for S9's
+  // away-gap heartbeat — frequent enough that a 15m custom interval still
+  // nudges within 30s of its true boundary, cheap enough to run forever in
+  // a tray app. See `reminderController.ts`'s module doc comment for why
+  // firing this many times near a boundary still yields exactly one nudge.
+  setInterval(() => {
+    void reminders.tick();
+  }, 30_000);
+
   await popover.refresh();
   await dashboard.refresh();
 
@@ -314,7 +343,7 @@ async function run(): Promise<Bootstrapped> {
     void showPopover();
   }
 
-  return { shortcuts, panel, popover, dashboard };
+  return { shortcuts, panel, popover, dashboard, reminders };
 }
 
 /** The Switch action (popover/reminder, wired by later slices): opens the

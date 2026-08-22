@@ -179,6 +179,30 @@ describe("S6 Log tab strings (both locales required, es idiomatic)", () => {
   });
 });
 
+describe("S8 reminder notification strings (both locales required, es idiomatic)", () => {
+  it("reminder.notification.title renders distinct non-empty literals in en and es", () => {
+    const enText = t("en", "reminder.notification.title");
+    const esText = t("es", "reminder.notification.title");
+    expect(enText.length).toBeGreaterThan(0);
+    expect(esText.length).toBeGreaterThan(0);
+    expect(enText).not.toBe(esText);
+  });
+
+  it("reminder.notification.body carries both the {name} and {elapsed} placeholders in en and es", () => {
+    for (const locale of ["en", "es"] as const) {
+      const text = t(locale, "reminder.notification.body");
+      expect(text).toContain("{name}");
+      expect(text).toContain("{elapsed}");
+    }
+  });
+
+  it("es reminder strings reuse the pinned 'en curso' idiom for the running state, never 'rastreando'", () => {
+    const esTitle = t("es", "reminder.notification.title");
+    expect(esTitle).toMatch(/en curso/i);
+    expect(esTitle).not.toMatch(/rastreando/i);
+  });
+});
+
 describe("fixed-format time formatter (reserved for exports — always 24-hour, locale-independent)", () => {
   it("is always 24-hour regardless of which locale display formatting would use", () => {
     expect(formatFixedTime(new Date(2026, 7, 21, 0, 5))).toBe("00:05");

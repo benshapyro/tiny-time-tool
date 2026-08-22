@@ -50,6 +50,20 @@
 # before this slice, from an earlier tray-icon-related dependency — same
 # reasoning applies to them, not re-verified here.)
 #
+# NOTE on S8's `tauri-plugin-notification` addition (npm
+# `@tauri-apps/plugin-notification`, cargo `tauri-plugin-notification` +
+# its dependency `notify-rust`, which pulls in platform-specific backends):
+# verified with `cargo tree --target <triple> -i <crate>` against both real
+# shipping targets. `notify-rust` and `tauri-plugin-notification` ARE in the
+# real dependency graph on both `aarch64-apple-darwin` and
+# `x86_64-pc-windows-msvc`. `mac-notification-sys` is macOS-only (present on
+# `aarch64-apple-darwin`, "nothing to print" on the Windows target);
+# `tauri-winrt-notification` is Windows-only (present on
+# `x86_64-pc-windows-msvc`, "nothing to print" on the macOS target) — same
+# "recorded once, built per-platform" pattern as every other platform-gated
+# dependency already in this file. No network I/O in any of the four; this
+# is a native OS notification bridge, not a network client.
+#
 # Regenerate the full member list from real lockfiles with:
 #   node -e "import('./scripts/check-deps-allowlist.mjs').then(async m => {
 #     const fs = await import('node:fs');
@@ -162,6 +176,7 @@
 @tauri-apps/cli-win32-ia32-msvc
 @tauri-apps/cli-win32-x64-msvc
 @tauri-apps/plugin-global-shortcut
+@tauri-apps/plugin-notification
 @tauri-apps/plugin-opener
 @tauri-apps/plugin-sql
 @testing-library/dom
@@ -503,6 +518,7 @@ linux-raw-sys
 litemap
 lock_api
 log
+mac-notification-sys
 markup5ever
 md-5
 memchr
@@ -515,6 +531,7 @@ muda
 ndk
 ndk-sys
 new_debug_unreachable
+notify-rust
 num-bigint-dig
 num-conv
 num-integer
@@ -668,12 +685,14 @@ tauri-codegen
 tauri-macros
 tauri-plugin
 tauri-plugin-global-shortcut
+tauri-plugin-notification
 tauri-plugin-opener
 tauri-plugin-sql
 tauri-runtime
 tauri-runtime-wry
 tauri-utils
 tauri-winres
+tauri-winrt-notification
 tempfile
 tendril
 thiserror

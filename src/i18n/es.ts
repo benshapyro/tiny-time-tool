@@ -63,4 +63,6 @@ export const es: Record<TranslationKey, string> = {
   "log.undo.deleted": "Se eliminó “{name}”.",
   "log.undo.action": "Deshacer",
   "log.undo.dismiss": "Descartar",
+  "reminder.notification.title": "Sigues en curso",
+  "reminder.notification.body": "{name} — {elapsed} hasta ahora",
 };
