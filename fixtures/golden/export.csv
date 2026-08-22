@@ -1,0 +1,3 @@
+date,task,client,project,duration_minutes,first_start,last_end
+2026-08-21,Acme onboarding,acme,rollout,90,2026-08-21T09:00:00-07:00,2026-08-21T10:30:00-07:00
+2026-08-21,Aug 21 · 11:00–11:45,,,45,2026-08-21T11:00:00-07:00,2026-08-21T11:45:00-07:00
