@@ -48,20 +48,41 @@
   box-shadow: 0 0 0 var(--border-width-emphasis) var(--color-focus-ring);
 }
 
+/* S13b: `overflow: hidden` here is what sliced a suggestion row in half
+   when the window was a pixel short (F5, and again in this slice's own
+   browser measurement: scrollHeight 128 vs clientHeight 100 with the
+   Spanish switch notice showing). `hidden auto` keeps the horizontal
+   clipping the rows rely on for their ellipsis while letting a list that
+   outgrows its window SCROLL instead of losing a row — which is also what
+   `panelHeightFor` already intends past MAX_VISIBLE_SUGGESTIONS. The panel
+   is still sized to its content; this is the non-destructive failure mode
+   for the pixel of drift a height model on a different platform font can
+   always have. */
 .quick-entry__suggestions {
   margin: 0;
   padding: 0;
   list-style: none;
   border: var(--border-width-hairline) solid var(--color-border);
   border-radius: var(--radius-sm);
-  overflow: hidden;
+  overflow: hidden auto;
 }
 
+/* S13b: one line per row. A suggestion is a past entry name — user data
+   with no length limit — and at 480px the Spanish ones wrapped to two
+   lines, making a row 55px against the 40px `panelHeightFor` budgets for
+   it. No fixed-row height model can survive a variable-height row, so the
+   row is pinned to one line and the tail ellipsises: the same treatment
+   `.popover__entryName`, `.log__entryName` and `.insights__taskName`
+   already give the same data. No translated string is shortened by this —
+   a suggestion carries no UI copy at all. */
 .quick-entry__suggestion {
   padding: var(--space-2) var(--space-3);
   color: var(--color-text-primary);
   font-size: var(--font-size-base);
   border-top: var(--border-width-hairline) solid var(--color-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quick-entry__suggestion:first-child {

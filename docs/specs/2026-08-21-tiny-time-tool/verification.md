@@ -635,6 +635,58 @@ command, with TS resolving the labels per locale and pushing them at boot and on
 language change. The English strings that remain in `tray.rs` are `Default::default()` —
 the pre-JS fallback for the first instants of launch, documented as such.
 
+## S13b — Spanish layout resilience
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 65 | Real `es` strings fit their surface at its real width | Narrowed the popover constant from 320 to 120 | Yes — `320px popover, .popover__actions: Reanudar / Cambiar / Detener needs 266.3px of 88px` | Byte-identical | The English equivalent needs 223.4px. **A 19% difference, measured** — exactly what principle 7 is about |
+
+### The mechanism, and why it is not vacuous
+
+The obvious implementation of this slice is a trap. **`scrollWidth > clientWidth` is
+always false in jsdom** — jsdom does not lay out, so both are `0`. A suite asserting "no
+element overflows" would pass on an empty div, a missing component, or a catastrophically
+broken one, and would look exactly like a clean audit. That is the F1/F7/F11 shape, and
+this slice was the last chance to catch Spanish layout problems before the human gate.
+
+What was built instead: a per-character text-width model **calibrated against real Chrome
+measurements of whole strings** — both locales, every font size the components use — with
+enforced error bounds (the model may under-report by at most 0.5%, and its upper bound
+may never be narrower than Chrome). Surface widths come from `tauri.conf.json` and the
+dashboard min-width token. The budgets then compare real `es` catalog strings against
+real available space.
+
+It can fail, and was made to: see row 65.
+
+### F13 — the panel's height model had drifted from its own stylesheet
+
+`panelHeight.ts` was written in S4 to fix F5, where the quick-entry panel sliced its
+suggestion list in half. It computed the height correctly **for the constants it
+believed**. Three of those constants had since stopped matching `quickEntryPanel.css` —
+and **all three were wrong in the unsafe direction**. The panel rendered **26px shorter
+than its own Spanish content**, slicing the third suggestion row in half again.
+
+Most instructive: `CHILD_GAP` was set to `--space-2` (8px) when the stylesheet uses
+`--space-3` (12px), and it was counted **once** when the CSS applies it between *every*
+pair of children.
+
+This is F5 recurring in the same component, by a different route. The first fix was
+correct when written; nothing kept the arithmetic and the stylesheet in agreement
+afterwards. Every constant is now re-derived from the CSS and cross-checked against
+Chrome, and documented as an **upper** bound — over-estimating costs a few pixels of
+empty panel, under-estimating loses a row.
+
+### A coordinator drill that was itself a fake break
+
+The first attempt at row 65 **stayed green**. The sabotage had changed only a *comment*
+naming the width, not the executable constant — `perl -0p` without `/g` replaces the
+first match, and the first match was prose. That is traps (b) and (d) from the standing
+list, hit simultaneously, by the coordinator who wrote the list, because the drill was
+run ad hoc instead of through the harness whose comment-only guard exists to catch it.
+
+Recorded because the lesson is not "be careful": it is that **the guard only works when
+it is used**, and convenience is what routes around it.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -661,14 +713,14 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S13a. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S13b; all implementation slices complete. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **64 of 64** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
-  3 S10, 3 S11, 4 S12, 3 S13a), every one re-run by the coordinator rather than
+- Checks verified: **65 of 65** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
+  3 S10, 3 S11, 4 S12, 3 S13a, 1 S13b), every one re-run by the coordinator rather than
   inherited from an implementer's report. Six mechanical gates now run in CI:
   zero-network, deps-allowlist, browser-safe imports, design tokens, i18n coverage,
   and no-hardcoded-strings.
-- Found broken and repaired: **10** — F1 (both Windows zero-network gates vacuous),
+- Found broken and repaired: **11** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
   by CI within minutes of the repo going public), F4 (`node:crypto` in the frontend
