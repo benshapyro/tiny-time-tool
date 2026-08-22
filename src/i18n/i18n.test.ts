@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { en } from "./en";
 import { es } from "./es";
-import { formatDisplayTime, formatFixedTime, formatLongDate, formatShortDate, interpolate, t } from "./index";
+import {
+  formatDisplayTime,
+  formatFixedTime,
+  formatLongDate,
+  formatPercent,
+  formatShortDate,
+  formatWeekdayShort,
+  interpolate,
+  t,
+} from "./index";
 
 describe("i18n smoke", () => {
   it("renders distinct expected literals for the same key in en and es", () => {
@@ -216,5 +225,79 @@ describe("fixed-format time formatter (reserved for exports — always 24-hour, 
     const d = new Date(2026, 7, 21, 9, 5);
     expect(formatFixedTime(d)).toBe(formatFixedTime(d));
     expect(formatFixedTime(d)).toBe("09:05");
+  });
+});
+
+describe("S11 Insights strings (both locales required, es idiomatic)", () => {
+  it("dashboard.tab.insights and insights.*.title render distinct non-empty literals in en and es", () => {
+    for (const key of [
+      "dashboard.tab.insights",
+      "insights.weekLabel",
+      "insights.weekBars.title",
+      "insights.tagShare.title",
+      "insights.tagShare.byClient",
+      "insights.tagShare.byProject",
+      "insights.topTasks.title",
+    ] as const) {
+      const enText = t("en", key);
+      const esText = t("es", key);
+      expect(enText.length).toBeGreaterThan(0);
+      expect(esText.length).toBeGreaterThan(0);
+      expect(enText).not.toBe(esText);
+    }
+  });
+
+  it("es Insights strings are idiomatic — 'Estadísticas' for the tab (not the 'Perspectivas' cognate), no leftover English", () => {
+    expect(t("es", "dashboard.tab.insights")).toBe("Estadísticas");
+    expect(t("es", "dashboard.tab.insights")).not.toMatch(/perspectivas/i);
+    for (const key of [
+      "insights.sectionLabel",
+      "insights.weekLabel",
+      "insights.emptyState",
+      "insights.weekBars.title",
+      "insights.tagShare.title",
+      "insights.tagShare.byClient",
+      "insights.tagShare.byProject",
+      "insights.tagShare.empty",
+      "insights.topTasks.title",
+      "insights.topTasks.empty",
+    ] as const) {
+      expect(t("es", key)).not.toMatch(/\b(insight|week|tag|share|task|client|project)\b/i);
+    }
+  });
+});
+
+describe("locale-aware short-weekday formatter (S11: the hours-by-day view's column labels)", () => {
+  it("formats en as a 3-letter abbreviation ('Tue' for 2026-08-18)", () => {
+    expect(formatWeekdayShort("en", new Date(2026, 7, 18))).toBe("Tue");
+  });
+
+  it("formats es idiomatically (lowercase, no leftover English weekday name)", () => {
+    const es = formatWeekdayShort("es", new Date(2026, 7, 18));
+    expect(es.toLowerCase()).toBe(es); // lowercase, per es-ES convention
+    expect(es).not.toMatch(/tue/i);
+    expect(es.length).toBeGreaterThan(0);
+  });
+
+  it("en and es render distinct literals for the same date", () => {
+    const d = new Date(2026, 7, 19); // Wednesday
+    expect(formatWeekdayShort("en", d)).not.toBe(formatWeekdayShort("es", d));
+  });
+});
+
+describe("locale-aware percent formatter (S11: tag-share display — rounding itself is NOT this formatter's job)", () => {
+  it("en-US: no space before the sign", () => {
+    expect(formatPercent("en", 62)).toBe("62%");
+  });
+
+  it("es-ES: a space before the sign (idiomatic, not the en convention)", () => {
+    const formatted = formatPercent("es", 62);
+    expect(formatted).toMatch(/^62.%$/); // the space may be a non-breaking space (U+00A0)
+    expect(formatted).not.toBe("62%");
+  });
+
+  it("renders 0% and 100% correctly at the boundaries", () => {
+    expect(formatPercent("en", 0)).toBe("0%");
+    expect(formatPercent("en", 100)).toBe("100%");
   });
 });

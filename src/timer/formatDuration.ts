@@ -13,12 +13,23 @@
 // BUILD_SPEC pins for CSV's `duration_minutes`, applied here too so a given
 // number of seconds never displays two different ways across surfaces.
 
+// S11: the round-half-up RULE itself, pulled out one level further than S10
+// left it. `roundMinutesHalfUp` below applies it to seconds->minutes;
+// Insights' tag-share percentages (BUILD_SPEC S11 row: "percentage = tag
+// duration ÷ current-week total, round-half-up to integer") apply the SAME
+// function to a ratio*100 in `insights/insightsAggregation.ts`, rather than
+// hand-rolling a second `Math.floor(x + 0.5)` — the coordinator's brief was
+// explicit that a second rounding rule must not be written.
+export function roundHalfUp(value: number): number {
+  return Math.floor(value + 0.5);
+}
+
 // S10: pulled out of formatDurationHM's body — CSV/JSON's `duration_minutes`
 // column (BUILD_SPEC: "integer, round-half-up") needs the same rounding rule
 // as an INTEGER, not embedded in a "Xh Ym" string. Both surfaces call this
 // one function so a given number of seconds never rounds two different ways.
 export function roundMinutesHalfUp(totalSeconds: number): number {
-  return Math.floor(totalSeconds / 60 + 0.5);
+  return roundHalfUp(totalSeconds / 60);
 }
 
 export function formatDurationHM(totalSeconds: number): string {

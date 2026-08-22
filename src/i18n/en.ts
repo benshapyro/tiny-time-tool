@@ -37,6 +37,7 @@ export const en = {
   "key.tab": "Tab",
   "dashboard.tabsLabel": "Dashboard tabs",
   "dashboard.tab.log": "Log",
+  "dashboard.tab.insights": "Insights",
   "log.nav.today": "Today",
   "log.nav.previous": "Previous day",
   "log.nav.next": "Next day",
@@ -76,6 +77,16 @@ export const en = {
   "export.range.csvButton": "Export CSV",
   "export.range.jsonButton": "Export JSON",
   "export.range.error.invalidOrder": "The start date must be on or before the end date.",
+  "insights.sectionLabel": "Insights",
+  "insights.weekLabel": "This week",
+  "insights.emptyState": "No time tracked yet this week.",
+  "insights.weekBars.title": "Hours by day",
+  "insights.tagShare.title": "Share by tag",
+  "insights.tagShare.byClient": "By client",
+  "insights.tagShare.byProject": "By project",
+  "insights.tagShare.empty": "No tagged time yet",
+  "insights.topTasks.title": "Biggest tasks",
+  "insights.topTasks.empty": "No named tasks yet",
 } as const;
 
 export type TranslationKey = keyof typeof en;

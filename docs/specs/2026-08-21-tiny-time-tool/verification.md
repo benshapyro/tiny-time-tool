@@ -460,6 +460,45 @@ called the surface clean. It checked what it was asked to check — truncation, 
 state design, focus — and a US date format inside a Spanish UI is none of those. The
 finding came from reading the screenshot without a checklist.
 
+## S11 — Insights (v1-lite)
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 55 | Biggest tasks key on the **full `(name, client, project)` tuple** | Grouped by name alone | Yes — `expected […] to have a length of 2 but got 1` | Byte-identical | The fixture deliberately contains two entries named "Acme onboarding" under different tags; grouping by name silently merges real work |
+| 56 | Percentages divide by the **week total**, not the tagged subtotal | Forced the percent to 100 | Yes — `expected 100 to be 50` | Byte-identical | Excluding untagged time from the denominator is a plausible-looking bug that inflates every share |
+| 57 | The week starts **Monday**, in local time | `daysSinceMonday` → `getDay()` (Sunday-start) | Yes — the whole day list shifts by one | Byte-identical | Deterministic only because S10 pinned `TZ` |
+
+The three pinned values are asserted verbatim, and the two-week fixture does real work:
+the Tuesday test notes that week A's Tuesday *alone* would sum to 12h, so a broken
+current-week filter cannot pass. The scope limit is tested as a **positive count** —
+`.insights__views` must have exactly three children, plus zero text inputs and zero
+spinbuttons — so a mistyped selector cannot manufacture a passing absence.
+
+**Arithmetic re-derived independently by the coordinator** from the rendered day totals
+rather than trusting the fixture: week total 14h 55m (895 min); @acme 555/895 = 62%,
+@beta 270/895 = 30%, #rollout 62%, #core 210/895 = 23%, #discovery 60/895 = 6.7% → 7%
+under round-half-up. All five match, and the bar widths are proportional (5h 15m ÷
+6h 30m = 81%, rendered at ~80%).
+
+### A drill that was only partly load-bearing, diagnosed rather than forced
+
+Breaking round-half-up to `Math.floor` left the pinned **62%** and **30%** green — those
+two values happen to floor to the same integer in this fixture. The implementer noticed
+and traced it rather than declaring the rule covered: the **7%** case (6.7 floors to 6)
+and the `formatDuration` family caught it for real. Worth recording because it is the
+same shape as S10's round-half-up gap — a pinned example can be satisfied by the wrong
+rule when the example does not straddle a boundary.
+
+### An open UX question, correctly flagged rather than silently resolved
+
+Client and project shares **do not sum to 100%** when untagged time exists — 62% + 30% =
+92% in the fixture, the missing 8% being an untagged entry. This is exactly what the
+spec's formula says (denominator = week total), and the implementer left it as specified
+rather than inventing a fourth row, since decisions #27 flags Insights as the first thing
+cut if polish is at risk. But a user glancing at it may read a math error rather than
+"untagged time has no row." **Ben's call at S14** — a one-line note or an "untagged" row
+would resolve it, and both are scope additions.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -486,10 +525,10 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S10. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S11. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **54 of 54** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
-  3 S10), every one re-run by the coordinator rather than inherited from an
+- Checks verified: **57 of 57** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
+  3 S10, 3 S11), every one re-run by the coordinator rather than inherited from an
   implementer's report.
 - Found broken and repaired: **8** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing

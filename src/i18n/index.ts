@@ -83,3 +83,38 @@ const fixedTimeFormatter = new Intl.DateTimeFormat("en-US", {
 export function formatFixedTime(date: Date): string {
   return fixedTimeFormatter.format(date);
 }
+
+// S11: Insights' "hours by day" view labels each of the week's 7 columns
+// with an abbreviated weekday name — locale-sensitive the same way dates and
+// times are (S10's design review missed a US-formatted date rendering inside
+// an otherwise-Spanish UI; weekday names are the same class of surface).
+// Reuses Intl's own per-locale abbreviation (`en`: "Tue", `es`: "mar", no
+// trailing period) rather than hand-building a lookup table.
+const weekdayShortFormatters: Record<Locale, Intl.DateTimeFormat> = {
+  en: new Intl.DateTimeFormat("en-US", { weekday: "short" }),
+  es: new Intl.DateTimeFormat("es-ES", { weekday: "short" }),
+};
+
+export function formatWeekdayShort(locale: Locale, date: Date): string {
+  return weekdayShortFormatters[locale].format(date);
+}
+
+// S11: Insights' tag-share percentages. The ROUNDING is done once, upstream,
+// by `roundHalfUp` (`timer/formatDuration.ts`) — BUILD_SPEC pins
+// round-half-up explicitly, and `Intl.NumberFormat`'s own rounding mode is
+// not guaranteed to match it. This formatter only renders an already-rounded
+// integer for DISPLAY, and that display is itself locale-sensitive: en-US
+// writes "62%" with no space, es-ES conventionally writes "62 %" with a
+// (non-breaking) space before the sign — verified against Node's ICU data
+// this session, not assumed.
+const percentFormatters: Record<Locale, Intl.NumberFormat> = {
+  en: new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 0 }),
+  es: new Intl.NumberFormat("es-ES", { style: "percent", maximumFractionDigits: 0 }),
+};
+
+/** `percentInt` is an already-rounded whole number (0-100, from
+ * `roundHalfUp`), not a fraction — divided by 100 here only to hand
+ * `Intl.NumberFormat` the ratio its `style: "percent"` option expects. */
+export function formatPercent(locale: Locale, percentInt: number): string {
+  return percentFormatters[locale].format(percentInt / 100);
+}
