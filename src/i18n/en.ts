@@ -64,6 +64,9 @@ export const en = {
   "log.undo.dismiss": "Dismiss",
   "reminder.notification.title": "Still tracking",
   "reminder.notification.body": "{name} — {elapsed} so far",
+  "away.prompt.message": "Away {elapsed} — add it back?",
+  "away.prompt.keep": "Keep",
+  "away.prompt.discard": "Discard",
 } as const;
 
 export type TranslationKey = keyof typeof en;

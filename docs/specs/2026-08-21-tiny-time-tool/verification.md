@@ -350,6 +350,43 @@ thing checked at S14 — before the "calm nudge" rubric, because if a real click
 nothing the remedy is a different mechanism (a Rust-side click delegate, or a different
 notification path), which is an architecture decision rather than a bug fix.
 
+## S9 — away-gap recovery
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 48 | **The boundary is strict**: exactly 5m00s ignored, 5m01s triggers | `>` → `>=` | Yes — `expected 'paused' to be 'running'` | Byte-identical | The highest-value drill in the slice. A `>=` slip passes any loose test and silently steals five minutes of real work |
+| 49 | The threshold is pinned at **5 minutes** | `5 * 60 * 1000` → `60 * 1000` | Yes — `expected 60000 to be 300000` | Byte-identical | Guards the constant itself, not just the comparison |
+| 50 | The trim lands at the **last heartbeat**, not at *now* | Passed `new Date()` to `pauseAt` instead of the heartbeat | Yes — `expected '2026-08-22T11:33:40.755Z' to be '2026-08-21T09:00:00.000Z'` | Byte-identical | This is the whole point of the slice: the user must not be billed for time they were away |
+| 51 | `pauseAt` honours the **given** timestamp | Substituted the clock for the passed value | Yes | Byte-identical | The engine primitive underneath row 50 |
+
+### Two drills that behaved unexpectedly, and were handled rather than forced
+
+The implementer hit trap (f) twice and got both right:
+
+- **The `state !== "running"` early return**: removing it left all 19 tests green. Rather
+  than manufacture a failing test, it traced why — the engine's own invariant keeps
+  `state` and "current entry has an open segment" in lockstep on every reachable path,
+  so a defensive check a few lines below independently catches everything the guard
+  would. It kept the guard as a cheap short-circuit but **rewrote the comment to say so
+  honestly** instead of implying coverage it does not have.
+- **`discard()` must not auto-resume**: the first sabotage stayed green because the
+  sabotage was a fire-and-forget async call and the test asserted synchronously, before
+  the microtask landed. It identified its own drill as invalid, fixed the test's timing,
+  and re-ran — genuinely red. An invalid drill reported as a finding would have been
+  worse than no drill.
+
+### Design reading recorded for Ben
+
+**Keep** undoes the trim outright — the away span counts as worked time and the timer
+resumes ticking live. **Discard** does nothing further: the segment was already trimmed
+at auto-pause, and discard deliberately does **not** auto-resume, because the point of
+the prompt is to let the user decide rather than silently restart a clock.
+
+The prompt lives **in the popover**, not a new window, on the same reasoning the spec
+already applies to Continue/Switch/Stop. When it is showing, the banner **replaces** the
+normal action row rather than layering over it — otherwise a Resume click could open a
+new segment underneath a pending prompt.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -376,10 +413,10 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S8. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S9. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **47 of 47** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8), every
-  one re-run by the coordinator rather than inherited from an implementer's report.
+- Checks verified: **51 of 51** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9),
+  every one re-run by the coordinator rather than inherited from an implementer's report.
 - Found broken and repaired: **8** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught

@@ -20,6 +20,7 @@ function baseState(overrides: Partial<PopoverState> = {}): PopoverState {
     timerStatus: "idle",
     elapsedSeconds: 0,
     teachLine: null,
+    awayPrompt: null,
     ...overrides,
   };
 }
@@ -30,6 +31,8 @@ function renderPopover(overrides: Partial<React.ComponentProps<typeof Popover>> 
   const onResume = vi.fn();
   const onSwitch = vi.fn();
   const onStop = vi.fn();
+  const onAwayKeep = vi.fn();
+  const onAwayDiscard = vi.fn();
   const props: React.ComponentProps<typeof Popover> = {
     locale: "en",
     state: baseState(),
@@ -38,10 +41,12 @@ function renderPopover(overrides: Partial<React.ComponentProps<typeof Popover>> 
     onResume,
     onSwitch,
     onStop,
+    onAwayKeep,
+    onAwayDiscard,
     ...overrides,
   };
   const result = render(<Popover {...props} />);
-  return { ...result, onStart, onPause, onResume, onSwitch, onStop };
+  return { ...result, onStart, onPause, onResume, onSwitch, onStop, onAwayKeep, onAwayDiscard };
 }
 
 describe("Popover — i18n", () => {
@@ -157,6 +162,8 @@ describe("Popover — paused is visually distinct from running AND from stopped 
         onResume={vi.fn()}
         onSwitch={vi.fn()}
         onStop={vi.fn()}
+        onAwayKeep={vi.fn()}
+        onAwayDiscard={vi.fn()}
       />,
     );
     expect(screen.getByText("Paused")).toBeInTheDocument();
@@ -206,6 +213,71 @@ describe("Popover — live ticking", () => {
   it("does not start an interval at all while idle (nothing to tick)", () => {
     renderPopover({ state: baseState({ timerStatus: "idle" }) });
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+// S9: away-gap recovery prompt (BUILD_SPEC S9 row: 'shows "Away Xh Ym — add
+// it back?" (keep / discard)'). Concluded this belongs in the popover
+// rather than a new window/surface — same reasoning BUILD_SPEC already
+// gives for putting Continue/Switch/Stop here rather than on the OS
+// notification itself: this IS the "glance surface" that already owns
+// every other running/paused decision, and a brand-new modal window would
+// be a second place to look for state a calm surface already displays.
+describe("Popover — away-gap prompt", () => {
+  it("renders the localized message and Keep/Discard instead of the normal action row", () => {
+    renderPopover({
+      state: baseState({
+        timerStatus: "paused",
+        elapsedSeconds: 0,
+        awayPrompt: { entryId: "1", message: "Away 9h 12m — add it back?" },
+      }),
+    });
+
+    expect(screen.getByText("Away 9h 12m — add it back?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Keep" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard" })).toBeInTheDocument();
+    // The ordinary paused actions must NOT also render — showing both would
+    // let a click on "Resume" corrupt the pending prompt's assumptions
+    // (see AwayGapController.reopenLastSegment's guard).
+    expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Switch" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
+  });
+
+  it("clicking Keep/Discard calls the respective handler", () => {
+    const { onAwayKeep, onAwayDiscard } = renderPopover({
+      state: baseState({
+        timerStatus: "paused",
+        awayPrompt: { entryId: "1", message: "Away 9h 12m — add it back?" },
+      }),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(onAwayKeep).toHaveBeenCalledTimes(1);
+    expect(onAwayDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it("no away prompt: the normal paused actions render as usual", () => {
+    renderPopover({ state: baseState({ timerStatus: "paused", elapsedSeconds: 5, awayPrompt: null }) });
+
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+  });
+
+  it("es locale renders the idiomatic Keep/Discard labels", () => {
+    renderPopover({
+      locale: "es",
+      state: baseState({
+        timerStatus: "paused",
+        awayPrompt: { entryId: "1", message: "Ausente 9h 12m — ¿lo recuperamos?" },
+      }),
+    });
+
+    expect(screen.getByText("Ausente 9h 12m — ¿lo recuperamos?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Recuperar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Descartar" })).toBeInTheDocument();
   });
 });
 

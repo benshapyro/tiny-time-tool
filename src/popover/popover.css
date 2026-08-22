@@ -156,3 +156,28 @@
   border-color: var(--color-danger);
   color: var(--color-danger);
 }
+
+/* S9: away-gap recovery prompt — replaces the normal action row (never
+   layered alongside it, see Popover.tsx). Uses the same paused-state color
+   as the timer header/entry row above (--color-state-paused): the auto-
+   pause this prompt is explaining IS a paused state, not a new one. */
+.popover__away {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width-hairline) solid var(--color-state-paused);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.popover__awayMessage {
+  margin: 0;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+.popover__awayActions {
+  display: flex;
+  gap: var(--space-2);
+}
