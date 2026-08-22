@@ -14,15 +14,11 @@
 
 import { emit, listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import type { Locale } from "../i18n";
+import { useLocale } from "../settings/useLocale";
 import Export from "./Export";
 import type { ExportActionKind } from "./exportEvents";
 import { EXPORT_ACTION_EVENT, EXPORT_STATE_EVENT } from "./exportEvents";
 import type { ExportState } from "./exportController";
-
-// S10 placeholder, same convention as App.tsx/LogContainer.tsx: language
-// comes from Settings (`language`) once S12 lands.
-const LOCALE: Locale = "en";
 
 const IDLE_STATE: ExportState = {
   copyStatus: "idle",
@@ -32,6 +28,7 @@ const IDLE_STATE: ExportState = {
 };
 
 function ExportContainer() {
+  const locale = useLocale();
   const [state, setState] = useState<ExportState>(IDLE_STATE);
 
   useEffect(() => {
@@ -49,7 +46,7 @@ function ExportContainer() {
 
   return (
     <Export
-      locale={LOCALE}
+      locale={locale}
       state={state}
       onCopyForAi={() => dispatch({ type: "copyForAi" })}
       onRangeStartChange={(value) => dispatch({ type: "setRangeStart", value })}

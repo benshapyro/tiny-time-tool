@@ -10,15 +10,19 @@ import App from "../App";
 import ExportContainer from "../export/ExportContainer";
 import InsightsContainer from "../insights/InsightsContainer";
 import LogContainer from "../log/LogContainer";
-
-// S6 placeholder, same convention as App.tsx/bootstrap.ts: language comes
-// from Settings (`language`) once S12 lands.
-const LOCALE = "en" as const;
+import SettingsContainer from "../settings/SettingsContainer";
+import { useLocale } from "../settings/useLocale";
 
 function DashboardContainer() {
+  // S12: the live-resolved locale, from `LiveSettingsProvider` (wrapped
+  // around this window's root in `main.tsx`) — replaces the hardcoded
+  // "en" placeholder every window carried before Settings existed to
+  // change it.
+  const locale = useLocale();
+
   return (
     <App
-      locale={LOCALE}
+      locale={locale}
       logContent={
         <>
           <LogContainer />
@@ -37,6 +41,9 @@ function DashboardContainer() {
       // surface, not something docked under Log's content the way Export's
       // couple of inputs were.
       insightsContent={<InsightsContainer />}
+      // S12: Settings gets its own tab too — decisions.md #26 names the
+      // three-tab set explicitly ("Log / Insights / Settings").
+      settingsContent={<SettingsContainer />}
     />
   );
 }

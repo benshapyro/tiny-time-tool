@@ -1,0 +1,165 @@
+/* S12 Settings tab. Tokens only — no literal colors/spacing (BUILD_SPEC
+   advisory rule + Design principle 4); enforced by
+   scripts/check-design-tokens.mjs. */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-5);
+  max-width: var(--size-settings-max-width);
+}
+
+.settings__title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-5);
+  border-bottom: var(--border-width-hairline) solid var(--color-border);
+}
+
+.settings__group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.settings__groupTitle {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* Standard accessible-hiding technique: keeps the label in the accessibility
+   tree (so its <select> still has a real accessible name) while removing it
+   from the visual layout — used where a group heading already shows the
+   same text visibly, so a second copy would be pure duplication. Zero-based
+   (no pixel literals) so it needs no token of its own. */
+.settings__visuallyHidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.settings__fieldLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.settings__select,
+.settings__numberInput {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.settings__note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.settings__shortcutRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings__shortcutLabel {
+  flex: 1 1 auto;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+.settings__shortcutValue {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+.settings__shortcutChange,
+.settings__shortcutCancel,
+.settings__updateButton {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-inverse);
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition: background var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.settings__shortcutChange:hover,
+.settings__shortcutCancel:hover,
+.settings__updateButton:hover {
+  background: var(--color-accent-hover);
+}
+
+.settings__shortcutListening {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  color: var(--color-accent);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+.settings__shortcutWarning {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}
+
+.settings__checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+.settings__version {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.settings__updateStatus {
+  font-size: var(--font-size-sm);
+}
+
+.settings__updateStatus--success {
+  color: var(--color-state-running);
+}
+
+.settings__updateStatus--error {
+  color: var(--color-danger);
+}

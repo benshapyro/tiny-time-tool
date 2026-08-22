@@ -499,6 +499,54 @@ cut if polish is at risk. But a user glancing at it may read a math error rather
 "untagged time has no row." **Ben's call at S14** — a one-line note or an "untagged" row
 would resolve it, and both are scope additions.
 
+## S12 — Settings
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 58 | Theme applies **live** to the DOM | Removed the `setAttribute("data-theme", …)` | Yes — `expected null to be 'light'` | Byte-identical | "Without restart" is the acceptance criterion; persistence alone would fail it |
+| 59 | Language resolves the **explicit** choice over the system locale | Dropped the explicit-choice branch | Yes — `expected 'es' to be 'en'` | Byte-identical | |
+| 60 | The update check opens the **pinned URL** | Changed the constant to a wrong address | Yes — **after F11 was fixed**; it stayed green before | Byte-identical | See F11 |
+| 61 | The reminder's **Custom…** option stays reachable | Neutered the local `customMode` state | Yes | Byte-identical | The implementer's own find, by using the surface rather than reading it |
+
+### F11 — a test that could not detect the thing it was named for
+
+The update-check test asserted `expect(openUpdatePage).toHaveBeenCalledWith(PINNED_UPDATE_URL)`,
+importing the same constant the implementation uses. That is **tautological**: whatever
+the constant says, both sides move together and the assertion passes. It proves the
+wiring — that *an* opener call happens with *the* constant — but it cannot detect a
+**wrong URL**, which is exactly what the spec's acceptance line ("invokes the opener with
+the pinned URL") is asking for.
+
+Found by a coordinator drill that changed the constant to `https://example.com/wrong`
+and **stayed green**.
+
+This mattered more than usual: the URL is a **placeholder the implementer explicitly
+flagged as needing Ben's confirmation**, because neither `BUILD_SPEC` nor `decisions.md`
+pins a literal address. A provisional value guarded by a test that cannot see it change
+is the worst combination available.
+
+Repaired by asserting a **literal** URL, plus a consistency check that the exported
+constant agrees with it. Changing the constant now fails. If the address ever needs to
+change, that is a deliberate decision about where users are sent, and it now requires
+editing a test.
+
+The same shape recurs throughout this file: F7's `grep -v "var("`, S9's fire-and-forget
+drill, S10 and S11's round-half-up. **A check written in terms of the thing it checks
+cannot fail.**
+
+### Two items recorded for Ben rather than decided
+
+- **The update URL is unconfirmed.** `https://github.com/benshapyro/tiny-time-tool/releases/latest`
+  is inferred from decision #33 (GitHub Releases) and the repo name in `goal-prompt.md`.
+  Decision #38 mentions a Drive link instead. Nothing else depends on the literal; it is
+  a one-line change plus the test literal above.
+- **Teach-line staleness after an in-session rebind.** `LogController` and
+  `PopoverController` each cache the primary accelerator at construction, so rebinding
+  updates Settings and the OS registration correctly while the popover and empty-Log
+  teach lines still name the old shortcut until restart. The S12 acceptance row names
+  only language and theme for live-swap, so this was judged scope growth rather than a
+  stated requirement — but it is real and findable.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -525,12 +573,12 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S11. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S12. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **57 of 57** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
-  3 S10, 3 S11), every one re-run by the coordinator rather than inherited from an
-  implementer's report.
-- Found broken and repaired: **8** — F1 (both Windows zero-network gates vacuous),
+- Checks verified: **61 of 61** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
+  3 S10, 3 S11, 4 S12), every one re-run by the coordinator rather than inherited from
+  an implementer's report.
+- Found broken and repaired: **9** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
   by CI within minutes of the repo going public), F4 (`node:crypto` in the frontend

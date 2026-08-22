@@ -14,16 +14,12 @@
 
 import { emit, listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import type { Locale } from "../i18n";
+import { useLocale } from "../settings/useLocale";
 import Log from "./Log";
 import type { LogSaveFields } from "./Log";
 import { LOG_ACTION_EVENT, LOG_EDIT_ACTION_EVENT, LOG_STATE_EVENT } from "./logEvents";
 import type { LogActionKind, LogEditActionKind } from "./logEvents";
 import type { LogState } from "./logController";
-
-// S6 placeholder, same convention as App.tsx/PopoverContainer.tsx: language
-// comes from Settings (`language`) once S12 lands.
-const LOCALE: Locale = "en";
 
 const IDLE_STATE: LogState = {
   dayKey: "",
@@ -38,6 +34,7 @@ const IDLE_STATE: LogState = {
 };
 
 function LogContainer() {
+  const locale = useLocale();
   const [state, setState] = useState<LogState>(IDLE_STATE);
 
   useEffect(() => {
@@ -59,7 +56,7 @@ function LogContainer() {
 
   return (
     <Log
-      locale={LOCALE}
+      locale={locale}
       state={state}
       onToday={() => dispatch("today")}
       onPrevious={() => dispatch("previous")}

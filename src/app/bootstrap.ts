@@ -48,6 +48,7 @@
 // double-register the global shortcuts against the same OS-level
 // accelerators).
 
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -67,12 +68,18 @@ import { QuickEntryController } from "../panel/quickEntryController";
 import { POPOVER_ACTION_EVENT, POPOVER_STATE_EVENT } from "../popover/popoverEvents";
 import type { PopoverActionPayload } from "../popover/popoverEvents";
 import { PopoverController } from "../popover/popoverController";
-import { DEFAULT_ACCELERATORS, ShortcutController } from "../shortcuts/shortcutController";
+import { ShortcutController } from "../shortcuts/shortcutController";
 import { createTauriShortcutDriver } from "../shortcuts/tauriShortcutDriver";
 import { consumeFirstLaunch } from "./firstLaunchFlag";
 import { ReminderController } from "../reminders/reminderController";
 import { getReminderMinutes } from "../reminders/reminderSettings";
 import { createTauriNotificationDriver } from "../reminders/tauriNotificationDriver";
+import { createTauriAutostartDriver } from "../settings/tauriAutostartDriver";
+import { getShortcutSetting } from "../settings/shortcutSettings";
+import { SettingsController } from "../settings/settingsController";
+import { SETTINGS_ACTION_EVENT, SETTINGS_STATE_EVENT } from "../settings/settingsEvents";
+import type { SettingsActionPayload } from "../settings/settingsEvents";
+import { tauriUpdateOpener } from "../settings/tauriUpdateOpener";
 import { createTauriSqlDriver } from "../timer/tauriSqlDriver";
 import { TimerEngine } from "../timer/timerEngine";
 
@@ -96,6 +103,7 @@ export interface Bootstrapped {
   insights: InsightsController;
   reminders: ReminderController;
   awayGap: AwayGapController;
+  settings: SettingsController;
 }
 
 let bootstrapped: Promise<Bootstrapped> | null = null;
@@ -114,6 +122,16 @@ async function run(): Promise<Bootstrapped> {
   const sqlDriver = await createTauriSqlDriver();
   const engine = await TimerEngine.create(sqlDriver);
   const shortcutDriver = createTauriShortcutDriver();
+
+  // S12: read whatever accelerators were persisted by a PRIOR session's
+  // rebind (falls back to `DEFAULT_ACCELERATORS` on a fresh database —
+  // `getShortcutSetting`'s own default). Read before `ShortcutController`
+  // is constructed so a rebind survives a real app restart, not just the
+  // current session — `rebind()` itself already makes it live within a
+  // session; this is the other half BUILD_SPEC's "persists ... applies
+  // without restart" names.
+  const persistedPrimaryAccelerator = await getShortcutSetting(sqlDriver, "primary");
+  const persistedStopAccelerator = await getShortcutSetting(sqlDriver, "stop");
 
   const panel = new QuickEntryController({
     engine,
@@ -143,7 +161,7 @@ async function run(): Promise<Bootstrapped> {
   const dashboard = new LogController({
     engine,
     locale: LOCALE,
-    primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+    primaryAccelerator: persistedPrimaryAccelerator,
     onStateChange: (state) => {
       void emit(LOG_STATE_EVENT, state);
     },
@@ -208,7 +226,7 @@ async function run(): Promise<Bootstrapped> {
   const popover: PopoverController = new PopoverController({
     engine,
     locale: LOCALE,
-    primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+    primaryAccelerator: persistedPrimaryAccelerator,
     onSwitch: () => switchAction(),
     awayGap,
     onStateChange: (state) => {
@@ -234,6 +252,7 @@ async function run(): Promise<Bootstrapped> {
   const shortcuts = new ShortcutController({
     driver: shortcutDriver,
     engine,
+    accelerators: { primary: persistedPrimaryAccelerator, stop: persistedStopAccelerator },
     onPanelOpenRequested: () => {
       panel.openForNaming();
       void showPanel();
@@ -439,6 +458,56 @@ async function run(): Promise<Bootstrapped> {
     onOpenPopover: () => showPopover(),
   });
   await reminders.registerClickHandler();
+
+  // S12: Settings. Composes rather than duplicates — persistence around
+  // S3's `shortcuts.rebind()` and S8's `reminders.setMinutes()`, new
+  // persisted concerns (language/theme/autostart/update-check) each its
+  // own small module. Constructed AFTER `shortcuts`/`reminders` exist
+  // (it drives both) and reconciles the real OS autostart registration to
+  // match persisted intent as part of `create()` — see that method's doc
+  // comment.
+  const settings = await SettingsController.create({
+    driver: sqlDriver,
+    shortcuts,
+    reminders,
+    autostart: createTauriAutostartDriver(),
+    openUpdatePage: tauriUpdateOpener,
+    getVersion: () => getVersion(),
+    onStateChange: (state) => {
+      void emit(SETTINGS_STATE_EVENT, state);
+    },
+  });
+
+  // The Settings tab relays every control the same way every other tab
+  // does — see settingsEvents.ts.
+  await listen<SettingsActionPayload>(SETTINGS_ACTION_EVENT, (event) => {
+    const { action } = event.payload;
+    switch (action.type) {
+      case "rebindShortcut":
+        void settings.rebindShortcut(action.id, action.accelerator);
+        return;
+      case "setReminderMinutes":
+        void settings.setReminderMinutes(action.minutes);
+        return;
+      case "setLanguage":
+        void settings.setLanguage(action.language);
+        return;
+      case "setTheme":
+        void settings.setTheme(action.theme);
+        return;
+      case "setAutostart":
+        void settings.setAutostart(action.enabled);
+        return;
+      case "checkForUpdates":
+        void settings.checkForUpdates();
+        return;
+      default: {
+        const exhaustive: never = action;
+        return exhaustive;
+      }
+    }
+  });
+
   // Polled, not event-driven: nothing in TimerEngine emits on the passage
   // of time. 30s matches the cadence BUILD_SPEC anticipates for S9's
   // away-gap heartbeat — frequent enough that a 15m custom interval still
@@ -471,6 +540,12 @@ async function run(): Promise<Bootstrapped> {
   // it, since ExportController has no async `refresh()` of its own (see the
   // "no cached view" comment on its construction above).
   void emit(EXPORT_STATE_EVENT, exports.state);
+  // S12: pushes Settings' initial state to every window. This is also the
+  // FIRST `settings:state` push every window's `LiveSettingsProvider`
+  // receives, which is what resolves the real persisted language/theme in
+  // place of its own "system"/en fallback default the instant the app
+  // opens — see that file's doc comment.
+  void emit(SETTINGS_STATE_EVENT, settings.state);
 
   // BUILD_SPEC S5: "On first launch the popover auto-opens once" —
   // persisted so a real restart never re-fires it (firstLaunchFlag.ts).
@@ -478,7 +553,7 @@ async function run(): Promise<Bootstrapped> {
     void showPopover();
   }
 
-  return { shortcuts, panel, popover, dashboard, exports, insights, reminders, awayGap };
+  return { shortcuts, panel, popover, dashboard, exports, insights, reminders, awayGap, settings };
 }
 
 /** The Switch action (popover/reminder, wired by later slices): opens the

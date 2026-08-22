@@ -17,15 +17,11 @@
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
-import type { Locale } from "../i18n";
+import { useLocale } from "../settings/useLocale";
 import Popover from "./Popover";
 import { POPOVER_ACTION_EVENT, POPOVER_STATE_EVENT } from "./popoverEvents";
 import type { PopoverActionKind } from "./popoverEvents";
 import type { PopoverState } from "./popoverController";
-
-// S5 placeholder, same convention as App.tsx/bootstrap.ts: language comes
-// from Settings (`language`) once S12 lands.
-const LOCALE: Locale = "en";
 
 const IDLE_STATE: PopoverState = {
   entries: [],
@@ -37,6 +33,7 @@ const IDLE_STATE: PopoverState = {
 };
 
 function PopoverContainer() {
+  const locale = useLocale();
   const [state, setState] = useState<PopoverState>(IDLE_STATE);
 
   useEffect(() => {
@@ -72,7 +69,7 @@ function PopoverContainer() {
 
   return (
     <Popover
-      locale={LOCALE}
+      locale={locale}
       state={state}
       onStart={() => dispatch("start")}
       onPause={() => dispatch("pause")}

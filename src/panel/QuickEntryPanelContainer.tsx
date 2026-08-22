@@ -16,21 +16,18 @@
 import { emit, listen } from "@tauri-apps/api/event";
 import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef, useState } from "react";
-import type { Locale } from "../i18n";
+import { useLocale } from "../settings/useLocale";
 import QuickEntryPanel from "./QuickEntryPanel";
 import { PANEL_COMMIT_EVENT, PANEL_INPUT_EVENT, PANEL_STATE_EVENT } from "./panelEvents";
 import { panelHeightFor } from "./panelHeight";
 import type { PanelState } from "./quickEntryController";
-
-// S4 placeholder, same convention as App.tsx/bootstrap.ts: language comes
-// from Settings (`language`) once S12 lands.
-const LOCALE: Locale = "en";
 
 const PANEL_WIDTH = 480;
 
 const CLOSED: PanelState = { mode: "closed", text: "", suggestions: [], notice: null };
 
 function QuickEntryPanelContainer() {
+  const locale = useLocale();
   const [text, setText] = useState("");
   const [remote, setRemote] = useState<PanelState>(CLOSED);
   const previousMode = useRef<PanelState["mode"]>("closed");
@@ -73,7 +70,7 @@ function QuickEntryPanelContainer() {
 
   return (
     <QuickEntryPanel
-      locale={LOCALE}
+      locale={locale}
       mode={remote.mode}
       text={text}
       suggestions={remote.suggestions}
