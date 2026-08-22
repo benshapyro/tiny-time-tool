@@ -1,0 +1,27 @@
+# .github/workflows/claude-review.yml — Claude CI code review (current v1 syntax)
+# Prereq: /install-github-app has been run in this repo (stores CLAUDE_CODE_OAUTH_TOKEN).
+name: Claude Code Review
+on:
+  pull_request:
+    types: [opened, synchronize]   # synchronize re-reviews every push — this powers the green loop
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this PR for correctness bugs, security issues, and significant
+            code-quality problems. Post findings as inline comments with severity.
+            Do not comment on style nits a formatter would catch.
+          claude_args: "--max-turns 25"
