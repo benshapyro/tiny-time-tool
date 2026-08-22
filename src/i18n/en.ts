@@ -62,6 +62,8 @@ export const en = {
   "log.undo.deleted": "Deleted “{name}”.",
   "log.undo.action": "Undo",
   "log.undo.dismiss": "Dismiss",
+  "reminder.notification.title": "Still tracking",
+  "reminder.notification.body": "{name} — {elapsed} so far",
 } as const;
 
 export type TranslationKey = keyof typeof en;

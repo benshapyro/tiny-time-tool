@@ -65,6 +65,14 @@ pub fn run() {
         // (`src/shortcuts/tauriShortcutDriver.ts`). Rust only registers the
         // plugin itself, per the "Rust stays thin" constraint.
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // S8: reminders. Same "Rust stays thin" split as every other
+        // plugin here — the interval math and the click -> open-popover
+        // decision are business logic in TS
+        // (`src/reminders/reminderController.ts`), driven through the
+        // plugin's JS `sendNotification`/`onAction` bindings
+        // (`src/reminders/tauriNotificationDriver.ts`). Rust only
+        // registers the plugin itself.
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![set_tray_state])
         .setup(|app| {
             tray::build_tray(app)?;
