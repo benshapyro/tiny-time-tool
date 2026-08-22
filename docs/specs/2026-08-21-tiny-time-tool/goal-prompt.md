@@ -29,10 +29,15 @@ and verification.md records every machine-verifiable check deliberately broken,
 observed failing, and restored. Honor every constraint in the spec, enforced
 and advisory. PR strategy: per-slice PRs on feature branches into main; commit
 after each slice passes its check; never let a diff outgrow ~400 changed lines
-without opening a PR. Stop and end your turn at every [HUMAN GATE] marker
-(after S1, after S5, at S14) and wait for Ben's approval line in decisions.md.
+without opening a PR. For each PR: after CI is green, read the AI review's
+findings via gh, fix the legitimate ones, contest the rest in
+REVIEW-CONTESTED.md (never silently dismiss), cycle cap 3, never force-push,
+then merge it yourself and continue. Run S1→S13b without stopping for a human;
+each UI slice ends with screenshots reviewed by an agent against the spec's
+Design principles, findings fixed before merge. Stop only at the [HUMAN GATE]
+at S14 and wait for Ben's approval line in decisions.md.
 Stop after 70 turns even if not done. When the run finishes, tell the user:
 "come back to launch-prep and say CHECK THE LANDING."
 ```
 
-**Gate schedule (decide to walk away, don't drift):** three gates — ~15–30 min in (S1: CI green + installers), ~2–4 h in (S5: popover screenshots vs design principles), and near the end (S14: full design sign-off + live manual checks). Longest unattended stretch: S6–S13b. Wall time ≈ 5× thinking time; plan for a full day.
+**Gate schedule (revised 2026-08-22):** one human gate only, at S14 near the end — full design sign-off + live manual checks. Everything before it runs unattended: autonomous per-slice design review and the per-PR review-fix loop replace the former mid-run gates. Wall time ≈ 5× thinking time; plan for a full day.

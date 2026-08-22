@@ -84,6 +84,14 @@ Provenance tags: `[HUMAN]` = Ben said it · `[DOC: source]` = named source · `[
 48. **Level 2 CI review: yes** — workflow file shipped in initial commit; Ben runs `/install-github-app` after the run creates the repo. Cost expectation set: ~$0.05–0.40/PR, triggers on every push. `[HUMAN]`
 49. Cold read 2's seven findings patched (see findings.md), incl. the primary-shortcut-while-running contradiction resolved: silent pause; Switch via popover/reminder or stop-then-start. `[HUMAN]` (unobjected patches)
 
+## Batch 8 — mid-run governance revision (settled 2026-08-22)
+
+50. **Mid-run human gates dissolved** (gates after S1 and S5 removed; S1 gate thereby approved-by-supersession — CI was green with all artifacts). Ben: UI can be built and reviewed autonomously; the human judges once at the end. Replaced by per-UI-slice autonomous design review (screenshots + agent review vs Design principles, findings fixed before merge). S14 remains the single human gate. `[HUMAN]`
+51. **Review-fix loop wired for every PR**: CI green → read AI review findings → fix legitimate / contest in REVIEW-CONTESTED.md → cycle cap 3 → run merges the PR itself. `[HUMAN]`
+52. **Ticking timer format pinned**: `M:SS` under 1h, `H:MM:SS` after; tray and popover agree. `[HUMAN]` (accepted implementer's choice)
+53. **Spanish idiom rule**: running state = `en curso`, never `rastreando`; S13a reviews idiom. `[HUMAN]`
+54. Skill-improvement issues filed on CadreAI/cadre-plugins-official: #66–70 (2026-08-22 batch 1); installer-workflow duplication, autonomous-design-review-not-mid-run-gates, review-loop-default-at-every-tier + tier/level naming, turn-count observability (batch 2, this date). `[HUMAN]` (directed)
+
 ## Open decisions (interview agenda)
 
 - Outcome + how we know it landed (stranger test)

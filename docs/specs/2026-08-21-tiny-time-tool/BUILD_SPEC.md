@@ -77,6 +77,8 @@
   - CSV columns, one row per entry: `date, task, client, project, duration_minutes, first_start, last_end`. `date` = `YYYY-MM-DD` (local); `duration_minutes` = integer, round-half-up; `first_start`/`last_end` = local-timezone ISO8601 with offset (e.g. `2026-08-21T09:00:00-04:00`); empty client/project = empty cell. JSON export mirrors the same fields and formats.
   - Settings keys: `shortcut.primary` (default `CmdOrCtrl+Shift+Space`), `shortcut.stop` (default `CmdOrCtrl+Shift+Alt+Space` — Shift+primary literal is not expressible as a distinct accelerator; this pair keeps the "related shortcuts" intent), `reminder.minutes` (60, 0=off), `language` (`system|en|es`), `theme` (`system|light|dark`), `autostart` (true).
   - SQLite file lives in the OS app-data dir; schema migrations via numbered SQL files from v1.
+  - Live ticking timer format (tray title and popover must agree): `M:SS` under one hour, `H:MM:SS` at and beyond (Ben, 2026-08-22 — as implemented in S1). Paused shows `⏸ ` + the same format.
+  - Spanish strings are idiomatic, not literal: the running-state tooltip/label is `en curso` (never `rastreando`); S13a's review checks idiom, not just coverage (Ben, 2026-08-22).
   - Day attribution: an entry belongs to the local calendar day of its first segment's start, everywhere — Log, Insights, CSV `date`, Copy-for-AI. A rare overnight entry is not split; away-gap recovery already prevents the common forgotten-overnight case. (Fixture: an entry starting 23:30 ending 00:45 appears only on the start day, duration 1h 15m.)
   - Glossary: "Run via **goal**" = the slice is executed by the autonomous `/goal` run defined in this bundle's `goal-prompt.md`; "**human**" rows are performed by the named person.
   - Design tokens: CSS custom properties in `src/styles/tokens.css` (semantic names, e.g. `--color-surface`, `--space-2`), dark values under `[data-theme="dark"]` with OS-sync via `prefers-color-scheme`; components consume tokens only.
@@ -114,12 +116,10 @@ Time tracked live on the day the work happened (vs reconstructed later): today �
 
 ## Rollout & gates
 
-- **[HUMAN GATE] after S1:** Ben eyeballs CI green + both installer artifacts before the build proceeds. (~15 min in.)
-- **[HUMAN GATE] after S5:** first styled surface — Ben reviews popover screenshots (light/dark × en/es) against the Design principles *before* the remaining UI is built in that style. This is the cheap moment to catch "horrible UI."
-- **[HUMAN GATE] at S14:** full design sign-off on the screenshot set + the live manual-check list.
-- **Gate mechanism:** at each gate the run ends its turn and stops — it does not self-certify and continue. Ben's approval is recorded as a line in `decisions.md` (gate name, date, verdict), and `Done` is not met while any gate line is missing. The gate slices' PRs stay unmerged until approved.
+- **Autonomous design review (replaces the former mid-run human gates — Ben, 2026-08-22):** every UI slice (S4, S5, S6, S7, S8, S11, S12, S13b) ends with the coordinator launching the real app where feasible, capturing screenshots (light + dark; es where strings differ), and running an agent design-review against the Design principles; findings are fixed before that slice's PR merges. The run proceeds S1→S13b without stopping for a human.
+- **[HUMAN GATE] at S14 — the only human gate:** Ben's single end-of-run review: the design-principles rubric on the full screenshot set (all surfaces × 2 themes × 2 languages) + the accumulated live manual checks from S4/S5/S8. The run ends its turn here and does not self-certify. Approval recorded as a line in `decisions.md`; `Done` is unmet without it.
 - **Run surface:** local (Ben's Mac) — CI covers the Windows build; no cloud need.
-- **PR strategy:** per-slice PRs on a feature branch into `main` of the new private repo; commit after each slice passes its check. Level 2 CI review (Claude GitHub Action) is optional wiring decided by Ben at launch — not part of `Done` and owned by no slice.
+- **PR strategy:** per-slice PRs on a feature branch into `main` of the new private repo; commit after each slice passes its check. **Review-fix loop per PR (Ben, 2026-08-22):** after CI is green, the run waits for the AI review, reads its findings via `gh`, fixes the legitimate ones, and contests the rest in `REVIEW-CONTESTED.md` with reasoning (never silently dismissed); cycle cap 3 per PR; never force-push. When the loop is clean, the run merges the PR itself and proceeds.
 
 ## Landing check
 
