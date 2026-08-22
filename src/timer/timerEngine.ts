@@ -34,6 +34,52 @@ export class IllegalTransitionError extends Error {
   }
 }
 
+// S7: editing errors (BUILD_SPEC S7 row). Overlap semantics are decided and
+// documented at length in timerEngine.editing.test.ts's module comment —
+// summary: a segment's edited [start, end) range must not intersect ANY
+// other segment's [start, end) in the whole database (not scoped to one
+// entry or one day), because this engine's single-open-segment invariant
+// means segments are never supposed to overlap at all. An open segment
+// (`endedAt: null`) counts as unbounded (`+Infinity`) on its end for this
+// check.
+export class OverlapError extends Error {
+  constructor() {
+    super("Edited times overlap another segment");
+    this.name = "OverlapError";
+  }
+}
+
+export class InvalidRangeError extends Error {
+  constructor() {
+    super("End time must be after start time");
+    this.name = "InvalidRangeError";
+  }
+}
+
+/** BUILD_SPEC S7: "Running entry: ... its end time is not editable until
+ * paused or stopped." The UI never renders a control that could trigger
+ * this (Log.tsx has no end-time input at all for a running entry — see
+ * Log.editing.test.tsx), but the engine enforces it independently rather
+ * than trusting the UI to be the only thing that can call it. */
+export class RunningSegmentEndNotEditableError extends Error {
+  constructor() {
+    super("Cannot edit the end time of a segment that is still running");
+    this.name = "RunningSegmentEndNotEditableError";
+  }
+}
+
+/** Deleting the entry the engine is currently tracking (running or paused)
+ * would leave `#currentEntryId`/`#openSegmentId` pointing at a row that no
+ * longer exists — a real state-corruption hazard, not just an edge case.
+ * The Log UI disables Delete for the running entry (Log.tsx); this is the
+ * defense-in-depth guard for any other caller. */
+export class CannotDeleteRunningEntryError extends Error {
+  constructor() {
+    super("Cannot delete the entry that is currently running or paused — stop it first");
+    this.name = "CannotDeleteRunningEntryError";
+  }
+}
+
 export interface StartFields {
   name?: string | null;
   client?: string | null;
@@ -207,6 +253,87 @@ export class TimerEngine {
       fields.project ?? null,
       entryId,
     ]);
+  }
+
+  /** S7: edits one segment's start and/or end time (rename/tags go through
+   * `setEntryFields` above — this is only ever the time-range editor).
+   * Either field may be omitted to leave it as-is; `endedAt` may not be
+   * supplied for a segment that is still open (`RunningSegmentEndNotEditableError`
+   * — BUILD_SPEC: the running entry's end time is not editable until paused
+   * or stopped). Validates the resulting range (`InvalidRangeError` if
+   * start >= end) and checks for overlap against every OTHER segment in the
+   * database (`OverlapError` — see the class doc comment above for the
+   * precise definition). Nothing is written unless every check passes. */
+  async updateSegmentTimes(segmentId: string, fields: { startedAt?: string; endedAt?: string }): Promise<void> {
+    const rows = await this.#driver.select<SegmentRow>("SELECT * FROM segments WHERE id = ?", [segmentId]);
+    const row = rows[0];
+    if (!row) {
+      throw new Error(`Unknown segment ${segmentId}`);
+    }
+
+    if (row.ended_at === null && fields.endedAt !== undefined) {
+      throw new RunningSegmentEndNotEditableError();
+    }
+
+    const newStart = fields.startedAt ?? row.started_at;
+    const newEnd = fields.endedAt !== undefined ? fields.endedAt : row.ended_at;
+
+    if (newEnd !== null && new Date(newStart).getTime() >= new Date(newEnd).getTime()) {
+      throw new InvalidRangeError();
+    }
+
+    const others = await this.#driver.select<SegmentRow>("SELECT * FROM segments WHERE id != ?", [segmentId]);
+    const newStartMs = new Date(newStart).getTime();
+    const newEndMs = newEnd === null ? Number.POSITIVE_INFINITY : new Date(newEnd).getTime();
+    for (const other of others) {
+      const otherStartMs = new Date(other.started_at).getTime();
+      const otherEndMs = other.ended_at === null ? Number.POSITIVE_INFINITY : new Date(other.ended_at).getTime();
+      if (newStartMs < otherEndMs && otherStartMs < newEndMs) {
+        throw new OverlapError();
+      }
+    }
+
+    await this.#driver.execute("UPDATE segments SET started_at = ?, ended_at = ? WHERE id = ?", [
+      newStart,
+      newEnd,
+      segmentId,
+    ]);
+  }
+
+  /** S7: deletes an entry and every one of its segments. Refuses to delete
+   * the entry the engine is currently tracking — see
+   * `CannotDeleteRunningEntryError`'s doc comment. The caller (LogController)
+   * is expected to snapshot the row via `entry()`/`segmentsFor()` BEFORE
+   * calling this, so it can offer undo via `restoreEntry` below — this
+   * method itself keeps no memory of what it deleted. */
+  async deleteEntry(entryId: string): Promise<void> {
+    if (entryId === this.#currentEntryId && this.#state !== "idle") {
+      throw new CannotDeleteRunningEntryError();
+    }
+    await this.#driver.execute("DELETE FROM segments WHERE entry_id = ?", [entryId]);
+    await this.#driver.execute("DELETE FROM time_entries WHERE id = ?", [entryId]);
+  }
+
+  /** S7: the undo half of delete. Re-inserts the exact rows a prior
+   * `entry()`/`segmentsFor()` snapshot captured — same ids, same
+   * timestamps — rather than reconstructing anything, so the restored row
+   * is byte-identical to the one that was deleted (BUILD_SPEC S7
+   * acceptance: "delete->undo restores the row byte-identical"). Callers
+   * must snapshot BEFORE calling `deleteEntry`; this method has no way to
+   * recover data it wasn't handed. */
+  async restoreEntry(entry: TimeEntry, segments: readonly Segment[]): Promise<void> {
+    await this.#driver.execute(
+      "INSERT INTO time_entries (id, name, client, project, created_at) VALUES (?, ?, ?, ?, ?)",
+      [entry.id, entry.name, entry.client, entry.project, entry.createdAt],
+    );
+    for (const segment of segments) {
+      await this.#driver.execute("INSERT INTO segments (id, entry_id, started_at, ended_at) VALUES (?, ?, ?, ?)", [
+        segment.id,
+        segment.entryId,
+        segment.startedAt,
+        segment.endedAt,
+      ]);
+    }
   }
 
   /** S4: autocomplete data source — distinct non-null names, most recently

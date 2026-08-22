@@ -16,3 +16,33 @@ export type LogActionKind = "today" | "previous" | "next";
 export interface LogActionPayload {
   action: LogActionKind;
 }
+
+// S7: a second, separate event for the editing surface (rename/tag/time
+// edits, delete, undo) rather than folding these into `LogActionKind`
+// above. Same reasoning as `panelEvents.ts` using distinct
+// PANEL_INPUT/PANEL_COMMIT events instead of one big discriminated kind:
+// these actions carry real payloads (an entry id, edited field values),
+// and keeping the plain day-nav clicks (`LogActionKind`) untouched avoids
+// widening every existing call site for a concern that only the edit UI
+// needs.
+export const LOG_EDIT_ACTION_EVENT = "log:editAction";
+
+export type LogEditActionKind =
+  | { type: "beginEdit"; entryId: string }
+  | { type: "cancelEdit" }
+  | {
+      type: "saveEdit";
+      entryId: string;
+      name: string | null;
+      client: string | null;
+      project: string | null;
+      start: string;
+      end?: string;
+    }
+  | { type: "delete"; entryId: string }
+  | { type: "undoDelete" }
+  | { type: "dismissUndo" };
+
+export interface LogEditActionPayload {
+  action: LogEditActionKind;
+}

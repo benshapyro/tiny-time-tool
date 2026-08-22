@@ -16,8 +16,9 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import type { Locale } from "../i18n";
 import Log from "./Log";
-import { LOG_ACTION_EVENT, LOG_STATE_EVENT } from "./logEvents";
-import type { LogActionKind } from "./logEvents";
+import type { LogSaveFields } from "./Log";
+import { LOG_ACTION_EVENT, LOG_EDIT_ACTION_EVENT, LOG_STATE_EVENT } from "./logEvents";
+import type { LogActionKind, LogEditActionKind } from "./logEvents";
 import type { LogState } from "./logController";
 
 // S6 placeholder, same convention as App.tsx/PopoverContainer.tsx: language
@@ -31,6 +32,9 @@ const IDLE_STATE: LogState = {
   entries: [],
   totalLabel: "0m",
   emptyStateTeachLine: null,
+  editingEntryId: null,
+  editError: null,
+  pendingUndo: null,
 };
 
 function LogContainer() {
@@ -49,6 +53,10 @@ function LogContainer() {
     void emit(LOG_ACTION_EVENT, { action });
   };
 
+  const dispatchEdit = (action: LogEditActionKind) => {
+    void emit(LOG_EDIT_ACTION_EVENT, { action });
+  };
+
   return (
     <Log
       locale={LOCALE}
@@ -56,6 +64,12 @@ function LogContainer() {
       onToday={() => dispatch("today")}
       onPrevious={() => dispatch("previous")}
       onNext={() => dispatch("next")}
+      onBeginEdit={(entryId) => dispatchEdit({ type: "beginEdit", entryId })}
+      onCancelEdit={() => dispatchEdit({ type: "cancelEdit" })}
+      onSaveEdit={(entryId, fields: LogSaveFields) => dispatchEdit({ type: "saveEdit", entryId, ...fields })}
+      onDelete={(entryId) => dispatchEdit({ type: "delete", entryId })}
+      onUndo={() => dispatchEdit({ type: "undoDelete" })}
+      onDismissUndo={() => dispatchEdit({ type: "dismissUndo" })}
     />
   );
 }
