@@ -8,7 +8,7 @@
 
 **Recommended first move — plan mode.** Before the goal, run in plan mode: *"Read docs/specs/2026-08-21-tiny-time-tool/BUILD_SPEC.md and propose the file layout, slice order, and how you'll honor the enforced constraints. Don't write code yet."* A confused plan finds a spec gap for the price of a few minutes' reading. If the plan conflicts with the spec, reconcile to one source of truth before launching — never let the plan silently win.
 
-**Before pasting:** switch to auto-accept edits (the deny rules and the gated spec do the containment). Launch with `--max-turns 70` at the harness — the prompt's cap is advisory; the harness cap is the real wall.
+**Before pasting:** switch to auto-accept edits (the gated spec, the sandbox, and the human gates do the containment — deny rules were declined, so spec-is-canonical is advisory). Launch with `--max-turns 70` at the harness — the prompt's cap is advisory; the harness cap is the real wall.
 
 Paste into Claude Code:
 
