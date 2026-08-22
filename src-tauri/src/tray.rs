@@ -18,12 +18,22 @@
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
-    App, Manager, Wry,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    App, Emitter, Manager, Wry,
 };
 
 pub const MENU_ID_OPEN_DASHBOARD: &str = "open_dashboard";
 pub const MENU_ID_QUIT: &str = "quit";
+
+/// S5: emitted to every window on a left-click of the tray icon. Rust stays
+/// thin here per this project's architecture rule (plumbing + OS
+/// integration only) — the decision of what a click *means* (open vs.
+/// close the popover, and refreshing its data before showing it) is
+/// business logic that lives in TS (`src/app/bootstrap.ts`'s
+/// `togglePopover()`), not here. The menu (Quit / Open Dashboard) still
+/// opens on right-click, native OS behavior, once `show_menu_on_left_click`
+/// is disabled below.
+pub const TRAY_CLICKED_EVENT: &str = "tray:clicked";
 
 /// Mirrors `TrayState` in `src/tray/trayState.ts`. Constructed from the
 /// `set_tray_state` Tauri command (`lib.rs`), which `src/app/bootstrap.ts`
@@ -123,7 +133,21 @@ pub fn build_tray(app: &App<Wry>) -> tauri::Result<()> {
         .icon_as_template(true)
         .tooltip(TrayState::Idle.tooltip())
         .menu(&menu)
-        .show_menu_on_left_click(true)
+        // S5: left-click now toggles the popover (relayed to TS via
+        // TRAY_CLICKED_EVENT below) instead of showing the menu; the menu
+        // still opens on right-click, the native OS default once this is
+        // disabled.
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let _ = tray.app_handle().emit(TRAY_CLICKED_EVENT, ());
+            }
+        })
         .on_menu_event(|app, event| match event.id().as_ref() {
             MENU_ID_OPEN_DASHBOARD => {
                 if let Some(window) = app.get_webview_window("main") {

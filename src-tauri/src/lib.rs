@@ -18,12 +18,20 @@ mod tray;
 const DB_URL: &str = "sqlite:tiny-time-tool.db";
 
 fn migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "init",
-        sql: include_str!("../migrations/0001_init.sql"),
-        kind: MigrationKind::Up,
-    }]
+    vec![
+        Migration {
+            version: 1,
+            description: "init",
+            sql: include_str!("../migrations/0001_init.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "settings",
+            sql: include_str!("../migrations/0002_settings.sql"),
+            kind: MigrationKind::Up,
+        },
+    ]
 }
 
 /// S4: the tray-sync half of `ShortcutController`'s `onTrayStateChange`

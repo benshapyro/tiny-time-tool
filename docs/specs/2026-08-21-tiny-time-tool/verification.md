@@ -196,6 +196,48 @@ function) with the list scrolling past five rows, plus the
 Worth naming: **no test would ever have caught this.** All 143 tests were green and the
 panel's own component tests passed. It took looking at a picture.
 
+## S5 — tray popover
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 32 | Day total pads minutes — the pinned fixture is `2h 05m`, not `2h 5m` | Dropped `padStart(2, "0")` | Yes — `expected '2h 5m' to be '2h 05m'` | Byte-identical | Two formats coexist: ticking `M:SS`, totals `Xh Ym`. Conflating them is the easy mistake |
+| 33 | First-launch auto-open fires **exactly once** | Removed the early-return guard in `consumeFirstLaunch` | Yes — `UNIQUE constraint failed: settings.key` | Byte-identical | Persisted in SQLite, so it survives restart — not a per-session flag |
+| 34 | Paused entry carries the pinned `⏸` treatment | Removed the glyph prefix from the entry row | Yes — `expected 'Paused task5m' to contain '⏸'` | Byte-identical | Paused must differ from running **and** stopped — three states |
+| 35 | **The accelerator is never shown as a raw Tauri token** | Emptied the modifier table so tokens pass through | Yes — `expected 'cmdorctrlshiftspace' not to contain 'cmdorctrl'` | Byte-identical | Guards F6 |
+
+### F6 — the first thing a new user reads was developer-speak
+
+The first-launch teach line interpolated the raw accelerator, so the popover greeted
+users with:
+
+```
+Pulsa CmdOrCtrl+Shift+Space para empezar a registrar
+```
+
+`CmdOrCtrl` is a Tauri internal token — not a key on any keyboard. This is the very
+first string the product shows, and it lands hardest on exactly the non-technical,
+Spanish-primary teammates ST8 ("install-to-first-tracked-task under a minute without
+help") and ST7 are written for. Design principle 9's award test would not survive it.
+
+`BUILD_SPEC` pins the teach line's *template* but not how the accelerator renders, so
+formatting it is spec-compliant rather than a spec change. Fixed with a pure,
+platform-parameterised `formatAccelerator`: `⌘⇧Space` on macOS, `Ctrl+Shift+Space`
+elsewhere. S12's rebind UI needs the same rendering, so it is shared rather than local
+to the popover. The strongest test is the invariant, not the literal: **no accelerator
+rendering may contain `CmdOrCtrl` on any platform.**
+
+Found by reading a screenshot, like F5 — the implementer flagged it honestly and scoped
+it out; the coordinator judged it in scope because it is the product's first impression.
+Two existing tests asserted the old raw-token output and were updated: they now assert
+the invariant as well as the value, which is a stronger test than what they replaced.
+
+### An observation recorded, deliberately not actioned
+
+The ticking timer renders elapsed time as `M:SS`, so a paused 22-minute entry displays
+**`22:00`** — which in a 24-hour locale reads exactly like a wall-clock time of 10 pm.
+The format is pinned (decision #52) and the run does not relitigate pinned decisions, so
+this is recorded for Ben's S14 rubric rather than changed.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -222,16 +264,19 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S4. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S5. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **31 of 31** (12 in S1, 6 in S2, 7 in S3, 6 in S4), every one re-run
-  by the coordinator rather than inherited from an implementer's report.
-- Found broken and repaired: **5** — F1 (both Windows zero-network gates vacuous),
+- Checks verified: **35 of 35** (12 in S1, 6 in S2, 7 in S3, 6 in S4, 4 in S5), every one
+  re-run by the coordinator rather than inherited from an implementer's report.
+- Found broken and repaired: **6** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
   by CI within minutes of the repo going public), F4 (`node:crypto` in the frontend
   bundle — the shipped app could not render, and every existing gate passed it), and
-  F5 (the panel clipped its own suggestion list, found by looking at a screenshot).
+  F5 (the panel clipped its own suggestion list, found by looking at a screenshot), and
+  F6 (the first-launch teach line showed the raw Tauri token `CmdOrCtrl+Shift+Space`).
+  **Three of the six were found by looking at screenshots or reading a mechanism, not
+  by a failing test** — which is the strongest argument for keeping both practices.
 - Drills rejected as invalid before scoring: **6** — two in S2 (a no-op sabotage and one
   red for the wrong reason) and four in S3 (three no-ops plus a comment-only "break"
   that made a real check look unguarded). All redone. Recorded because a drill harness

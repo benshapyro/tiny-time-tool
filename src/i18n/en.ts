@@ -17,6 +17,16 @@ export const en = {
   "panel.placeholder": "Task name, @client, #project",
   "panel.switchNotice": "Will stop: {name} ({elapsed})",
   "panel.suggestionsLabel": "Suggestions",
+  "popover.teachLine": "Press {shortcut} to start tracking",
+  "popover.entriesLabel": "Today's entries",
+  "popover.totalLabel": "Today's total",
+  "popover.status.running": "Running",
+  "popover.status.paused": "Paused",
+  "popover.action.start": "Start",
+  "popover.action.pause": "Pause",
+  "popover.action.resume": "Resume",
+  "popover.action.switch": "Switch",
+  "popover.action.stop": "Stop",
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -1,8 +1,9 @@
 // Real runtime wiring for the app's "main" window (BUILD_SPEC S4: "a later
 // slice that wires a ShortcutController into the running app" — this is
 // that slice). Constructs the production TimerEngine + ShortcutController +
-// QuickEntryController against the real Tauri plugins (SQLite,
-// global-shortcut) and connects S3's seams to S4's panel window:
+// QuickEntryController + (S5) PopoverController against the real Tauri
+// plugins (SQLite, global-shortcut) and connects S3's seams to S4's panel
+// window and S5's popover window:
 //   - `onPanelOpenRequested` (fires exactly on primary-from-idle): opens the
 //     panel for naming, then shows and focuses the "panel" window declared
 //     in `src-tauri/tauri.conf.json`. This is the mechanism the S4 spike
@@ -14,25 +15,30 @@
 //     commit current text (as Enter) then pause").
 //   - `onTrayStateChange`: forwarded to the Rust `set_tray_state` command so
 //     the tray icon/title stay in sync with pause/resume/stop, per the
-//     2026-08-22 amendment ("pause must be visible, not modal").
+//     2026-08-22 amendment ("pause must be visible, not modal") — and (S5)
+//     also refreshes the popover's view, so it stays correct even if it
+//     wasn't open when the state changed (e.g. a shortcut press while the
+//     popover is closed).
 //
-// The "panel" window is a SEPARATE webview/JS context (no shared memory
-// with "main"), so `QuickEntryController`'s state reaches it only over
-// Tauri's cross-window event bus (`panelEvents.ts`) — never a shared JS
-// object. `core:event:default` (listen/emit) is already part of
-// `core:default`, already granted to both windows in
-// `src-tauri/capabilities/default.json`.
+// The "panel" and "popover" windows are SEPARATE webview/JS contexts (no
+// shared memory with "main"), so `QuickEntryController`/`PopoverController`
+// state reaches them only over Tauri's cross-window event bus
+// (`panelEvents.ts` / `popoverEvents.ts`) — never a shared JS object.
+// `core:event:default` (listen/emit) is already part of `core:default`,
+// already granted to every window in `src-tauri/capabilities/default.json`.
 //
 // No unit test for the IPC glue itself (same reasoning as
 // `tauriSqlDriver.ts` / `tauriShortcutDriver.ts` — stubbing Tauri's bridge
 // would only prove the stub). The business logic this wires together
-// (`ShortcutController`, `QuickEntryController`) is exercised in
-// `panelWiring.test.ts` against fakes; this file's real behaviour is
-// exercised live, at the S14 manual-check gate and the S4 spike.
+// (`ShortcutController`, `QuickEntryController`, `PopoverController`) is
+// exercised in `panelWiring.test.ts` / `popoverController.test.ts` against
+// fakes; this file's real behaviour is exercised live, at the S14
+// manual-check gate and the S4 spike.
 //
-// Runs exactly once, and only from the "main" window — the "panel" window's
-// own script must never call this (it would double-register the global
-// shortcuts against the same OS-level accelerators).
+// Runs exactly once, and only from the "main" window — the "panel"/
+// "popover" windows' own scripts must never call this (it would
+// double-register the global shortcuts against the same OS-level
+// accelerators).
 
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
@@ -41,8 +47,12 @@ import type { Locale } from "../i18n";
 import { PANEL_COMMIT_EVENT, PANEL_INPUT_EVENT, PANEL_STATE_EVENT } from "../panel/panelEvents";
 import type { PanelCommitPayload, PanelInputPayload } from "../panel/panelEvents";
 import { QuickEntryController } from "../panel/quickEntryController";
-import { ShortcutController } from "../shortcuts/shortcutController";
+import { POPOVER_ACTION_EVENT, POPOVER_STATE_EVENT } from "../popover/popoverEvents";
+import type { PopoverActionPayload } from "../popover/popoverEvents";
+import { PopoverController } from "../popover/popoverController";
+import { DEFAULT_ACCELERATORS, ShortcutController } from "../shortcuts/shortcutController";
 import { createTauriShortcutDriver } from "../shortcuts/tauriShortcutDriver";
+import { consumeFirstLaunch } from "./firstLaunchFlag";
 import { createTauriSqlDriver } from "../timer/tauriSqlDriver";
 import { TimerEngine } from "../timer/timerEngine";
 
@@ -50,9 +60,17 @@ import { TimerEngine } from "../timer/timerEngine";
 // (`language`) and OS detection once S12 lands. Default "en" until then.
 const LOCALE: Locale = "en";
 
+// S5: mirrors `TRAY_CLICKED_EVENT` in `src-tauri/src/tray.rs` — Rust only
+// emits this on a tray-icon left-click; deciding what it means
+// (`togglePopover`, below) is TS business logic, per the "Rust stays thin"
+// rule. Kept as a literal, not imported, since the two sides can't share a
+// module across the Rust/TS boundary — same convention as `set_tray_state`.
+const TRAY_CLICKED_EVENT = "tray:clicked";
+
 export interface Bootstrapped {
   shortcuts: ShortcutController;
   panel: QuickEntryController;
+  popover: PopoverController;
 }
 
 let bootstrapped: Promise<Bootstrapped> | null = null;
@@ -80,6 +98,16 @@ async function run(): Promise<Bootstrapped> {
     },
   });
 
+  const popover = new PopoverController({
+    engine,
+    locale: LOCALE,
+    primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+    onSwitch: () => switchAction(),
+    onStateChange: (state) => {
+      void emit(POPOVER_STATE_EVENT, state);
+    },
+  });
+
   const shortcuts = new ShortcutController({
     driver: shortcutDriver,
     engine,
@@ -90,6 +118,7 @@ async function run(): Promise<Bootstrapped> {
     onBeforePause: () => panel.commitIfOpen(),
     onTrayStateChange: (state, elapsedSeconds) => {
       void invoke("set_tray_state", { state, elapsedSeconds });
+      void popover.refresh();
     },
   });
   await shortcuts.registerAll();
@@ -104,7 +133,49 @@ async function run(): Promise<Bootstrapped> {
     void panel.commit();
   });
 
-  return { shortcuts, panel };
+  // The popover window relays button clicks the same way — see
+  // popoverEvents.ts. Each action refreshes and re-pushes state via the
+  // controller's own onStateChange, already wired above.
+  await listen<PopoverActionPayload>(POPOVER_ACTION_EVENT, (event) => {
+    switch (event.payload.action) {
+      case "start":
+        void popover.start();
+        return;
+      case "pause":
+        void popover.pause();
+        return;
+      case "resume":
+        void popover.resume();
+        return;
+      case "stop":
+        void popover.stop();
+        return;
+      case "switch":
+        void popover.switchTask().then(() => hidePopover());
+        return;
+      default: {
+        const exhaustive: never = event.payload.action;
+        return exhaustive;
+      }
+    }
+  });
+
+  // Rust's tray icon click handler (tray.rs) only emits — deciding what a
+  // click means (open vs. close, refreshing first) is business logic and
+  // stays here, per this project's "Rust stays thin" rule.
+  await listen(TRAY_CLICKED_EVENT, () => {
+    void togglePopover();
+  });
+
+  await popover.refresh();
+
+  // BUILD_SPEC S5: "On first launch the popover auto-opens once" —
+  // persisted so a real restart never re-fires it (firstLaunchFlag.ts).
+  if (await consumeFirstLaunch(sqlDriver)) {
+    void showPopover();
+  }
+
+  return { shortcuts, panel, popover };
 }
 
 /** The Switch action (popover/reminder, wired by later slices): opens the
@@ -123,4 +194,38 @@ export async function showPanel(): Promise<void> {
   if (!win) return;
   await win.show();
   await win.setFocus();
+}
+
+/** S5: shows and focuses the tray popover window. Real anchoring to the
+ * tray icon's position is the S14 manual check (BUILD_SPEC S5 row) — this
+ * summons the window declared in `src-tauri/tauri.conf.json` the same way
+ * `showPanel` summons the quick-entry panel. Called by the tray icon's
+ * click handler (Rust, `tray.rs`) and by the first-launch auto-open. */
+export async function showPopover(): Promise<void> {
+  const { popover } = await bootstrap();
+  await popover.refresh();
+  const win = await WebviewWindow.getByLabel("popover");
+  if (!win) return;
+  await win.show();
+  await win.setFocus();
+}
+
+/** S5: hides the tray popover window — the target of Esc/click-away
+ * (`PopoverContainer.tsx`) and of a completed Switch action. */
+export async function hidePopover(): Promise<void> {
+  const win = await WebviewWindow.getByLabel("popover");
+  if (!win) return;
+  await win.hide();
+}
+
+/** S5: toggles the tray popover — the tray icon's own click handler wants
+ * "open if closed, close if open" rather than always-open. */
+export async function togglePopover(): Promise<void> {
+  const win = await WebviewWindow.getByLabel("popover");
+  if (!win) return;
+  if (await win.isVisible()) {
+    await win.hide();
+  } else {
+    await showPopover();
+  }
 }
