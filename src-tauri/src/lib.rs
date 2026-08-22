@@ -73,6 +73,18 @@ pub fn run() {
         // (`src/reminders/tauriNotificationDriver.ts`). Rust only
         // registers the plugin itself.
         .plugin(tauri_plugin_notification::init())
+        // S12: launch-at-login. Same "Rust stays thin" split as every other
+        // plugin here — the persisted intent, the reconcile-at-boot logic,
+        // and the toggle live in TS (`src/settings/settingsController.ts`),
+        // driven through the plugin's JS `enable`/`disable`/`isEnabled`
+        // bindings (`src/settings/tauriAutostartDriver.ts`). Rust only
+        // registers the plugin itself. No `MacosLauncher`/app-name override
+        // — the plugin's own defaults (LaunchAgent, this app's bundle name)
+        // are correct for this app.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![set_tray_state])
         .setup(|app| {
             tray::build_tray(app)?;

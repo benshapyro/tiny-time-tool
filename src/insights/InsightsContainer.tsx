@@ -16,14 +16,10 @@
 
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import type { Locale } from "../i18n";
+import { useLocale } from "../settings/useLocale";
 import Insights from "./Insights";
 import { INSIGHTS_STATE_EVENT } from "./insightsEvents";
 import type { InsightsState } from "./insightsController";
-
-// S11 placeholder, same convention as App.tsx/LogContainer.tsx: language
-// comes from Settings (`language`) once S12 lands.
-const LOCALE: Locale = "en";
 
 const IDLE_STATE: InsightsState = {
   days: [],
@@ -35,6 +31,7 @@ const IDLE_STATE: InsightsState = {
 };
 
 function InsightsContainer() {
+  const locale = useLocale();
   const [state, setState] = useState<InsightsState>(IDLE_STATE);
 
   useEffect(() => {
@@ -46,7 +43,7 @@ function InsightsContainer() {
     };
   }, []);
 
-  return <Insights locale={LOCALE} state={state} />;
+  return <Insights locale={locale} state={state} />;
 }
 
 export default InsightsContainer;

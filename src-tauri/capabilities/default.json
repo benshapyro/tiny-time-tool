@@ -15,6 +15,7 @@
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
     "notification:default",
+    "autostart:default",
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-focus",

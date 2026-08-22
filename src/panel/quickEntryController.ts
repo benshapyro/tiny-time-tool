@@ -53,7 +53,7 @@ const CLOSED_STATE: PanelState = { mode: "closed", text: "", suggestions: [], no
 
 export class QuickEntryController {
   readonly #engine: TimerEngine;
-  readonly #locale: Locale;
+  #locale: Locale;
   readonly #clock: () => Date;
   readonly #recentNamesLimit: number;
   readonly #onStateChange?: (state: PanelState) => void;
@@ -77,6 +77,17 @@ export class QuickEntryController {
 
   get state(): PanelState {
     return this.#state;
+  }
+
+  /** S12 review fix: the live-locale seam — mirrors `ReminderController.
+   * setMinutes()`'s "persistence and live behaviour are separate" split.
+   * `bootstrap.ts` calls this after `SettingsController.setLanguage`
+   * persists a new choice, so an in-progress "switching" notice built under
+   * the OLD locale is not what this affects (that text is already baked
+   * into `state.notice` and stays as-is until the panel closes) — this only
+   * changes what the NEXT `openForSwitch()` call formats its notice in. */
+  setLocale(locale: Locale): void {
+    this.#locale = locale;
   }
 
   /** S3's `onPanelOpenRequested` seam: primary-from-idle. The entry has

@@ -64,6 +64,16 @@
 # dependency already in this file. No network I/O in any of the four; this
 # is a native OS notification bridge, not a network client.
 #
+# NOTE on S12's `tauri-plugin-autostart` addition (npm
+# `@tauri-apps/plugin-autostart` 2.5.1, cargo `tauri-plugin-autostart` +
+# its direct dependency `auto-launch`): verified with
+# `cargo tree --target <triple> -i <crate>` against both real shipping
+# targets, same procedure as every other plugin addition in this file.
+# Both ARE in the real dependency graph on `aarch64-apple-darwin` and
+# `x86_64-pc-windows-msvc`. This is a native OS login-items registration
+# (macOS LaunchAgent / Windows registry run key via `auto-launch`), not a
+# network client.
+#
 # Regenerate the full member list from real lockfiles with:
 #   node -e "import('./scripts/check-deps-allowlist.mjs').then(async m => {
 #     const fs = await import('node:fs');
@@ -175,6 +185,7 @@
 @tauri-apps/cli-win32-arm64-msvc
 @tauri-apps/cli-win32-ia32-msvc
 @tauri-apps/cli-win32-x64-msvc
+@tauri-apps/plugin-autostart
 @tauri-apps/plugin-global-shortcut
 @tauri-apps/plugin-notification
 @tauri-apps/plugin-opener
@@ -318,6 +329,7 @@ atk
 atk-sys
 atoi
 atomic-waker
+auto-launch
 autocfg
 base64
 base64ct
@@ -684,6 +696,7 @@ tauri-build
 tauri-codegen
 tauri-macros
 tauri-plugin
+tauri-plugin-autostart
 tauri-plugin-global-shortcut
 tauri-plugin-notification
 tauri-plugin-opener

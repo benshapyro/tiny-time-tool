@@ -118,3 +118,60 @@ describe("App — Insights tab (S11)", () => {
     expect(panel.getAttribute("aria-labelledby")).toBe(logTab.getAttribute("id"));
   });
 });
+
+describe("App — Settings tab (S12)", () => {
+  it("renders a Settings tab, NOT selected by default, in en", () => {
+    render(<App locale="en" />);
+    const tab = screen.getByRole("tab", { name: "Settings" });
+    expect(tab).toBeInTheDocument();
+    expect(tab).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("renders the distinct es literal for the Settings tab", () => {
+    render(<App locale="es" />);
+    expect(screen.getByRole("tab", { name: "Configuración" })).toBeInTheDocument();
+  });
+
+  it("the Settings tab is a real, keyboard-reachable control", () => {
+    render(<App locale="en" />);
+    const tab = screen.getByRole("tab", { name: "Settings" });
+    expect(tab.tagName).toBe("BUTTON");
+    expect(tab).not.toHaveAttribute("tabindex", "-1");
+  });
+
+  it("clicking the Settings tab selects it and swaps in its content, hiding Log's and Insights'", () => {
+    render(
+      <App
+        locale="en"
+        logContent={<div data-testid="log-content">log stuff</div>}
+        insightsContent={<div data-testid="insights-content">insights stuff</div>}
+        settingsContent={<div data-testid="settings-content">settings stuff</div>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+
+    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Log" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Insights" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByTestId("settings-content")).toBeInTheDocument();
+    expect(screen.queryByTestId("log-content")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("insights-content")).not.toBeInTheDocument();
+  });
+
+  it("exactly one tabpanel is ever mounted at a time across all three tabs", () => {
+    render(
+      <App
+        locale="en"
+        logContent={<div>log</div>}
+        insightsContent={<div>insights</div>}
+        settingsContent={<div>settings</div>}
+      />,
+    );
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("tab", { name: "Insights" }));
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+  });
+});

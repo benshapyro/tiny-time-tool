@@ -285,6 +285,75 @@ describe("locale-aware short-weekday formatter (S11: the hours-by-day view's col
   });
 });
 
+describe("S12 Settings strings (both locales required, es idiomatic)", () => {
+  it("dashboard.tab.settings and every settings.*.title render distinct non-empty literals in en and es", () => {
+    for (const key of [
+      "dashboard.tab.settings",
+      "settings.shortcuts.title",
+      "settings.reminders.title",
+      "settings.language.title",
+      "settings.appearance.title",
+      "settings.autostart.title",
+      "settings.about.title",
+    ] as const) {
+      const enText = t("en", key);
+      const esText = t("es", key);
+      expect(enText.length).toBeGreaterThan(0);
+      expect(esText.length).toBeGreaterThan(0);
+      expect(enText).not.toBe(esText);
+    }
+  });
+
+  it("es Settings strings are idiomatic — 'Configuración' for the tab, no leftover English", () => {
+    expect(t("es", "dashboard.tab.settings")).toBe("Configuración");
+    for (const key of [
+      "settings.sectionLabel",
+      "settings.shortcuts.title",
+      "settings.shortcuts.change",
+      "settings.shortcuts.cancel",
+      "settings.reminders.title",
+      "settings.reminders.off",
+      "settings.reminders.custom",
+      "settings.language.title",
+      "settings.language.system",
+      "settings.appearance.title",
+      "settings.appearance.system",
+      "settings.appearance.light",
+      "settings.appearance.dark",
+      "settings.autostart.title",
+      "settings.about.title",
+      "settings.about.checkForUpdates",
+    ] as const) {
+      expect(t("es", key)).not.toMatch(/\b(settings|shortcut|change|cancel|reminder|off|custom|language|system|appearance|light|dark|autostart|about|update)\b/i);
+    }
+  });
+
+  it("settings.about.version carries the {version} placeholder in en and es", () => {
+    for (const locale of ["en", "es"] as const) {
+      expect(t(locale, "settings.about.version")).toContain("{version}");
+    }
+  });
+
+  it("settings.shortcuts.changeAria carries the {label} placeholder in en and es", () => {
+    for (const locale of ["en", "es"] as const) {
+      expect(t(locale, "settings.shortcuts.changeAria")).toContain("{label}");
+    }
+  });
+
+  it("reuses the pinned shortcut-failure warning strings from S3 (no separate, drifting copy for the same failure)", () => {
+    expect(t("en", "shortcuts.warning.primaryFailed")).toMatch(/settings/i);
+    expect(t("es", "shortcuts.warning.primaryFailed")).toMatch(/configuraci[oó]n/i);
+  });
+
+  it("the language note names the fields it's warning about (F10 — OS-locale date/time pickers) in both locales", () => {
+    for (const locale of ["en", "es"] as const) {
+      expect(t(locale, "settings.language.note").length).toBeGreaterThan(0);
+    }
+    expect(t("en", "settings.language.note")).toMatch(/date and time/i);
+    expect(t("es", "settings.language.note")).toMatch(/fecha y hora/i);
+  });
+});
+
 describe("locale-aware percent formatter (S11: tag-share display — rounding itself is NOT this formatter's job)", () => {
   it("en-US: no space before the sign", () => {
     expect(formatPercent("en", 62)).toBe("62%");

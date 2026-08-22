@@ -4,12 +4,13 @@ import type { Locale } from "./i18n";
 import { t } from "./i18n";
 import "./App.css";
 
-export type DashboardTab = "log" | "insights";
+export type DashboardTab = "log" | "insights" | "settings";
 
 export interface AppProps {
   /**
-   * Language will come from Settings (`language`) and OS detection once
-   * S12 lands; default "en" until then.
+   * The live-resolved locale (S12: `LiveSettingsProvider`/`useLocale()` —
+   * "en" absent an explicit override, same default every prior slice used
+   * before Settings existed to change it).
    */
   locale?: Locale;
   /** The Log tab's content (BUILD_SPEC S6 row: entries + day nav, plus S10's
@@ -26,6 +27,11 @@ export interface AppProps {
    * so this component stays pure and testable without a live engine — the
    * real content is wired in by `app/DashboardContainer.tsx`. */
   insightsContent?: ReactNode;
+  /** The Settings tab's content (BUILD_SPEC S12 row) — the third and final
+   * Dashboard tab (decisions.md #26: "Log / Insights / Settings"). Same
+   * "un-rendered when omitted, wired live by DashboardContainer" rule as
+   * `insightsContent`. */
+  settingsContent?: ReactNode;
 }
 
 /**
@@ -43,7 +49,7 @@ export interface AppProps {
  * `Log.tsx`'s `EditForm` owning its own uncommitted draft text: no
  * controller needs to know which tab button was clicked.
  */
-function App({ locale = "en", logContent, insightsContent }: AppProps) {
+function App({ locale = "en", logContent, insightsContent, settingsContent }: AppProps) {
   const idBase = useId();
   const [activeTab, setActiveTab] = useState<DashboardTab>("log");
 
@@ -51,6 +57,8 @@ function App({ locale = "en", logContent, insightsContent }: AppProps) {
   const logPanelId = `${idBase}-panel-log`;
   const insightsTabId = `${idBase}-tab-insights`;
   const insightsPanelId = `${idBase}-panel-insights`;
+  const settingsTabId = `${idBase}-tab-settings`;
+  const settingsPanelId = `${idBase}-panel-settings`;
 
   return (
     <div className="dashboard">
@@ -77,14 +85,31 @@ function App({ locale = "en", logContent, insightsContent }: AppProps) {
         >
           {t(locale, "dashboard.tab.insights")}
         </button>
+        <button
+          type="button"
+          role="tab"
+          id={settingsTabId}
+          aria-selected={activeTab === "settings"}
+          aria-controls={settingsPanelId}
+          className={`dashboard__tab${activeTab === "settings" ? " dashboard__tab--active" : ""}`}
+          onClick={() => setActiveTab("settings")}
+        >
+          {t(locale, "dashboard.tab.settings")}
+        </button>
       </div>
-      {activeTab === "log" ? (
+      {activeTab === "log" && (
         <div className="dashboard__content" role="tabpanel" id={logPanelId} aria-labelledby={logTabId}>
           {logContent}
         </div>
-      ) : (
+      )}
+      {activeTab === "insights" && (
         <div className="dashboard__content" role="tabpanel" id={insightsPanelId} aria-labelledby={insightsTabId}>
           {insightsContent}
+        </div>
+      )}
+      {activeTab === "settings" && (
+        <div className="dashboard__content" role="tabpanel" id={settingsPanelId} aria-labelledby={settingsTabId}>
+          {settingsContent}
         </div>
       )}
     </div>

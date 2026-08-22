@@ -48,6 +48,7 @@
 // double-register the global shortcuts against the same OS-level
 // accelerators).
 
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -67,18 +68,23 @@ import { QuickEntryController } from "../panel/quickEntryController";
 import { POPOVER_ACTION_EVENT, POPOVER_STATE_EVENT } from "../popover/popoverEvents";
 import type { PopoverActionPayload } from "../popover/popoverEvents";
 import { PopoverController } from "../popover/popoverController";
-import { DEFAULT_ACCELERATORS, ShortcutController } from "../shortcuts/shortcutController";
+import { ShortcutController } from "../shortcuts/shortcutController";
 import { createTauriShortcutDriver } from "../shortcuts/tauriShortcutDriver";
 import { consumeFirstLaunch } from "./firstLaunchFlag";
 import { ReminderController } from "../reminders/reminderController";
 import { getReminderMinutes } from "../reminders/reminderSettings";
 import { createTauriNotificationDriver } from "../reminders/tauriNotificationDriver";
+import { applyLocaleLive } from "../settings/applyLocale";
+import { getLanguageSetting } from "../settings/languageSetting";
+import { detectSystemLocale, resolveLocale } from "../settings/resolveLocale";
+import { createTauriAutostartDriver } from "../settings/tauriAutostartDriver";
+import { getShortcutSetting } from "../settings/shortcutSettings";
+import { SettingsController } from "../settings/settingsController";
+import { SETTINGS_ACTION_EVENT, SETTINGS_STATE_EVENT } from "../settings/settingsEvents";
+import type { SettingsActionPayload } from "../settings/settingsEvents";
+import { tauriUpdateOpener } from "../settings/tauriUpdateOpener";
 import { createTauriSqlDriver } from "../timer/tauriSqlDriver";
 import { TimerEngine } from "../timer/timerEngine";
-
-// S4 placeholder, same convention as App.tsx: language comes from Settings
-// (`language`) and OS detection once S12 lands. Default "en" until then.
-const LOCALE: Locale = "en";
 
 // S5: mirrors `TRAY_CLICKED_EVENT` in `src-tauri/src/tray.rs` — Rust only
 // emits this on a tray-icon left-click; deciding what it means
@@ -96,6 +102,7 @@ export interface Bootstrapped {
   insights: InsightsController;
   reminders: ReminderController;
   awayGap: AwayGapController;
+  settings: SettingsController;
 }
 
 let bootstrapped: Promise<Bootstrapped> | null = null;
@@ -115,9 +122,29 @@ async function run(): Promise<Bootstrapped> {
   const engine = await TimerEngine.create(sqlDriver);
   const shortcutDriver = createTauriShortcutDriver();
 
+  // S12: read whatever accelerators were persisted by a PRIOR session's
+  // rebind (falls back to `DEFAULT_ACCELERATORS` on a fresh database —
+  // `getShortcutSetting`'s own default). Read before `ShortcutController`
+  // is constructed so a rebind survives a real app restart, not just the
+  // current session — `rebind()` itself already makes it live within a
+  // session; this is the other half BUILD_SPEC's "persists ... applies
+  // without restart" names.
+  const persistedPrimaryAccelerator = await getShortcutSetting(sqlDriver, "primary");
+  const persistedStopAccelerator = await getShortcutSetting(sqlDriver, "stop");
+
+  // S12 review fix: this used to be a hardcoded `const LOCALE: Locale =
+  // "en"` placeholder (dating back to S4, "until S12 lands" — this IS
+  // S12), so a persisted `language: "es"` from a PRIOR session never
+  // reached a single controller, even on a fresh boot. Read before every
+  // locale-aware controller below is constructed, same "read once at boot,
+  // an explicit seam makes it live later" pattern `persistedPrimaryAccelerator`
+  // above already establishes for shortcuts.
+  const persistedLanguage = await getLanguageSetting(sqlDriver);
+  const locale: Locale = resolveLocale(persistedLanguage, detectSystemLocale());
+
   const panel = new QuickEntryController({
     engine,
-    locale: LOCALE,
+    locale,
     onStateChange: (state) => {
       void emit(PANEL_STATE_EVENT, state);
     },
@@ -142,8 +169,8 @@ async function run(): Promise<Bootstrapped> {
   // `logController.ts`'s module doc comment for the full reasoning.
   const dashboard = new LogController({
     engine,
-    locale: LOCALE,
-    primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+    locale,
+    primaryAccelerator: persistedPrimaryAccelerator,
     onStateChange: (state) => {
       void emit(LOG_STATE_EVENT, state);
     },
@@ -176,7 +203,7 @@ async function run(): Promise<Bootstrapped> {
   // current week.
   const insights = new InsightsController({
     engine,
-    locale: LOCALE,
+    locale,
     onStateChange: (state) => {
       void emit(INSIGHTS_STATE_EVENT, state);
     },
@@ -207,8 +234,8 @@ async function run(): Promise<Bootstrapped> {
 
   const popover: PopoverController = new PopoverController({
     engine,
-    locale: LOCALE,
-    primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+    locale,
+    primaryAccelerator: persistedPrimaryAccelerator,
     onSwitch: () => switchAction(),
     awayGap,
     onStateChange: (state) => {
@@ -234,6 +261,7 @@ async function run(): Promise<Bootstrapped> {
   const shortcuts = new ShortcutController({
     driver: shortcutDriver,
     engine,
+    accelerators: { primary: persistedPrimaryAccelerator, stop: persistedStopAccelerator },
     onPanelOpenRequested: () => {
       panel.openForNaming();
       void showPanel();
@@ -434,11 +462,80 @@ async function run(): Promise<Bootstrapped> {
   const reminders = new ReminderController({
     engine,
     driver: createTauriNotificationDriver(),
-    locale: LOCALE,
+    locale,
     minutes: reminderMinutes,
     onOpenPopover: () => showPopover(),
   });
   await reminders.registerClickHandler();
+
+  // S12: Settings. Composes rather than duplicates — persistence around
+  // S3's `shortcuts.rebind()` and S8's `reminders.setMinutes()`, new
+  // persisted concerns (language/theme/autostart/update-check) each its
+  // own small module. Constructed AFTER `shortcuts`/`reminders` exist
+  // (it drives both) and reconciles the real OS autostart registration to
+  // match persisted intent as part of `create()` — see that method's doc
+  // comment.
+  const settings = await SettingsController.create({
+    driver: sqlDriver,
+    shortcuts,
+    reminders,
+    autostart: createTauriAutostartDriver(),
+    openUpdatePage: tauriUpdateOpener,
+    getVersion: () => getVersion(),
+    onStateChange: (state) => {
+      void emit(SETTINGS_STATE_EVENT, state);
+    },
+  });
+
+  // The Settings tab relays every control the same way every other tab
+  // does — see settingsEvents.ts.
+  await listen<SettingsActionPayload>(SETTINGS_ACTION_EVENT, (event) => {
+    const { action } = event.payload;
+    switch (action.type) {
+      case "rebindShortcut":
+        void settings.rebindShortcut(action.id, action.accelerator);
+        return;
+      case "setReminderMinutes":
+        void settings.setReminderMinutes(action.minutes);
+        return;
+      case "setLanguage":
+        // Review finding (S12): persisting alone is not "applies without
+        // restart" — `panel`/`dashboard`/`insights`/`popover`/`reminders`
+        // each pre-format locale-sensitive text INTO their state, which
+        // `useLocale()`'s React-layer re-render cannot fix retroactively.
+        // `applyLocaleLive` is the real seam (see its own doc comment and
+        // `applyLocale.test.ts`) — called only AFTER persistence succeeds,
+        // so a failed write never applies a locale that didn't actually
+        // stick.
+        void settings.setLanguage(action.language).then(() => {
+          const newLocale = resolveLocale(action.language, detectSystemLocale());
+          return applyLocaleLive(newLocale, { panel, dashboard, insights, popover, reminders });
+        });
+        return;
+      case "setTheme":
+        void settings.setTheme(action.theme);
+        return;
+      case "setAutostart":
+        void settings.setAutostart(action.enabled);
+        return;
+      case "checkForUpdates":
+        void settings.checkForUpdates();
+        return;
+      case "requestState":
+        // Review finding (S12): a just-mounted `SettingsContainer` missed
+        // the boot-time push (it isn't the default tab) and Tauri never
+        // replays a past event to a late listener — re-emit the CURRENT
+        // state (not a recomputed one) so a late-opened Settings tab shows
+        // real values instead of `IDLE_STATE` defaults.
+        void emit(SETTINGS_STATE_EVENT, settings.state);
+        return;
+      default: {
+        const exhaustive: never = action;
+        return exhaustive;
+      }
+    }
+  });
+
   // Polled, not event-driven: nothing in TimerEngine emits on the passage
   // of time. 30s matches the cadence BUILD_SPEC anticipates for S9's
   // away-gap heartbeat — frequent enough that a 15m custom interval still
@@ -471,6 +568,12 @@ async function run(): Promise<Bootstrapped> {
   // it, since ExportController has no async `refresh()` of its own (see the
   // "no cached view" comment on its construction above).
   void emit(EXPORT_STATE_EVENT, exports.state);
+  // S12: pushes Settings' initial state to every window. This is also the
+  // FIRST `settings:state` push every window's `LiveSettingsProvider`
+  // receives, which is what resolves the real persisted language/theme in
+  // place of its own "system"/en fallback default the instant the app
+  // opens — see that file's doc comment.
+  void emit(SETTINGS_STATE_EVENT, settings.state);
 
   // BUILD_SPEC S5: "On first launch the popover auto-opens once" —
   // persisted so a real restart never re-fires it (firstLaunchFlag.ts).
@@ -478,7 +581,7 @@ async function run(): Promise<Bootstrapped> {
     void showPopover();
   }
 
-  return { shortcuts, panel, popover, dashboard, exports, insights, reminders, awayGap };
+  return { shortcuts, panel, popover, dashboard, exports, insights, reminders, awayGap, settings };
 }
 
 /** The Switch action (popover/reminder, wired by later slices): opens the

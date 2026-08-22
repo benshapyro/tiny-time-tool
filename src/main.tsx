@@ -5,6 +5,7 @@ import { bootstrap } from "./app/bootstrap";
 import DashboardContainer from "./app/DashboardContainer";
 import QuickEntryPanelContainer from "./panel/QuickEntryPanelContainer";
 import PopoverContainer from "./popover/PopoverContainer";
+import LiveSettingsProvider from "./settings/LiveSettingsProvider";
 import "./styles/tokens.css";
 
 // Three windows share this one entry point (BUILD_SPEC S4: the quick-entry
@@ -29,6 +30,13 @@ const RootComponent =
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <RootComponent />
+    {/* S12: every window — "main", "panel", and "popover" alike — needs to
+        react live to a language/theme change (BUILD_SPEC's "without
+        restart" acceptance criterion), even though only "main" ever
+        renders the Settings tab that changes them. See
+        `LiveSettingsProvider.tsx`'s doc comment. */}
+    <LiveSettingsProvider>
+      <RootComponent />
+    </LiveSettingsProvider>
   </React.StrictMode>,
 );
