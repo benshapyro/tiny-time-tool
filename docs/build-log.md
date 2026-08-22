@@ -157,3 +157,55 @@ earlier.
 7. **CI is unexercised.** Every step was run locally and is green, but no real
    `macos-latest` / `windows-latest` run has happened yet, and the Windows build has
    never been compiled anywhere. That is precisely what the S1 gate exists to check.
+
+## S1 — first CI run (32548859884): what only real runners could find
+
+macOS passed end to end in 5m42s and uploaded `tiny-time-tool-macos-dmg` (3,103,436
+bytes). Windows failed. Two defects, both invisible on a Mac. This is the entry that
+justifies the S1 gate existing at all.
+
+### Defect 1 — CRLF broke the Windows test suite
+
+`SyntaxError: Invalid or unexpected token` on both `scripts/*.test.ts` suites; 25 tests
+passed, 2 suites never loaded. No `.gitattributes` existed, and Git for Windows checks
+out with `autocrlf=true` (the `windows-latest` default), so the `.mjs` check scripts
+arrived with CRLF and Vite's shebang handling could not parse them.
+
+**Reproduced locally before fixing** — converted the four files to CRLF on macOS and got
+the byte-identical error, then converted back and confirmed `git diff` empty. Fixed with
+a `.gitattributes` pinning `* text=auto eol=lf`, which closes the whole class rather
+than these four files.
+
+### Defect 2 — both zero-network CI gates were vacuous on Windows
+
+Far more serious, and it would have passed silently and *looked green forever*.
+
+Both check scripts guarded their CLI entry with:
+
+```js
+if (import.meta.url === `file://${process.argv[1]}`) main();
+```
+
+That comparison is false for any path needing URL encoding and for **every** Windows
+path (`file://C:\...` never equals `file:///C:/...`). When false, `main()` never runs,
+the process exits 0, and CI records a passing zero-network check **that scanned
+nothing**. Mechanism (b) and mechanism (c) — two of the three enforced constraints —
+were both dead on `windows-latest`, and nothing in the run would ever have said so.
+
+Windows never reached those steps (it died at Vitest first), so this was found by
+reading the mechanism rather than by watching it fail. **Proven locally** by copying the
+scanner to a directory whose name contains a space and running it against a tree with a
+real `WebSocket` violation: exit 0 instead of 1 — the gate never ran.
+
+Fixed to `pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url` in both
+scripts. `realpathSync` is load-bearing, not defensive: Node's ESM loader resolves
+symlinks when building `import.meta.url` while `process.argv[1]` stays literal, so on
+macOS (`/tmp` → `/private/tmp`) the first attempt at the fix *still* failed. Caught
+because the regression test was watched going red, then green — the intermediate fix
+looked correct and was not.
+
+**Regression test added** (`still detects a violation when its own path contains a
+space`): verified red against the old guard with exactly one failure on the intended
+assertion, green against the new one. 43 → 44 tests.
+
+Recorded as rows in `verification.md`: these are the run's real findings so far.

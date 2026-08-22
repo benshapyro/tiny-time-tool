@@ -10,8 +10,9 @@
 // temporary fixture tree so the check's real behaviour is exercised without
 // touching the repo itself.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const FORBIDDEN_PATTERNS = [
   "std::net",
@@ -98,6 +99,19 @@ function main() {
 }
 
 // Only run as a CLI when invoked directly (not when imported by tests).
-if (import.meta.url === `file://${process.argv[1]}`) {
+//
+// Compare real file URLs, not a hand-built `file://` + path string. The naive
+// form silently evaluates to false whenever the path needs URL encoding (a
+// space in a directory name) and on EVERY Windows path (`file://C:\...` never
+// equals `file:///C:/...`). The failure mode is the dangerous direction: the
+// CLI body never runs, the process exits 0, and CI reports a green
+// zero-network check that scanned nothing at all.
+//
+// `realpathSync` matters too: Node's ESM loader resolves symlinks when it
+// builds `import.meta.url`, but `process.argv[1]` is the literal string the
+// caller typed. Invoked through a symlinked directory (macOS `/tmp` →
+// `/private/tmp`, or any symlinked checkout) the two would disagree and the
+// gate would go quiet again.
+if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) {
   main();
 }

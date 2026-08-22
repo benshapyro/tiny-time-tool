@@ -1,0 +1,19 @@
+# Normalize line endings to LF in the repo AND in the working tree on every
+# platform. Without this, Git for Windows (autocrlf=true, the GitHub Actions
+# windows-latest default) checks these files out with CRLF, and Vite's
+# shebang handling then fails to parse the `.mjs` check scripts with
+# "SyntaxError: Invalid or unexpected token" — which took down the entire
+# Vitest step on windows-latest in the first CI run of S1.
+#
+# `eol=lf` is deliberate (rather than plain `text`): these files are executed
+# by Node and parsed by Vite on both platforms, so they must be byte-identical
+# everywhere, not normalized-on-commit-and-converted-on-checkout.
+* text=auto eol=lf
+
+# Binary assets — never touch these.
+*.png binary
+*.ico binary
+*.icns binary
+*.dmg binary
+*.msi binary
+*.exe binary

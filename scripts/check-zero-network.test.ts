@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,6 +38,35 @@ function runCli(dir: string): { status: number; stdout: string; stderr: string }
     return { status: e.status, stdout: e.stdout, stderr: e.stderr };
   }
 }
+
+describe("check-zero-network.mjs — the gate actually runs as a CLI", () => {
+  // Regression test for a gate that could not fail. The direct-invocation
+  // guard used to be `import.meta.url === \`file://${process.argv[1]}\``,
+  // which is false for any path needing URL encoding and for EVERY Windows
+  // path. The CLI body then never ran and the process exited 0 — CI reported
+  // a green zero-network check that had scanned nothing. A space in the
+  // script's own path reproduces the Windows breakage on POSIX.
+  it("still detects a violation when its own path contains a space", () => {
+    const violating = makeFixture({
+      "src/App.tsx": "const ws = new WebSocket('wss://example.com');\n",
+    });
+    const spacedDir = mkdtempSync(join(tmpdir(), "ttt zero network "));
+    const spacedScript = join(spacedDir, "check-zero-network.mjs");
+    copyFileSync(SCRIPT_PATH, spacedScript);
+
+    try {
+      let status = 0;
+      try {
+        execFileSync("node", [spacedScript, violating], { encoding: "utf8" });
+      } catch (err) {
+        status = (err as { status: number }).status;
+      }
+      expect(status).not.toBe(0);
+    } finally {
+      rmSync(spacedDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("check-zero-network.mjs — real subprocess against fixture trees", () => {
   it("exits 0 on a clean tree", () => {

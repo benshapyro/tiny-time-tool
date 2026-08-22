@@ -9,8 +9,9 @@
 // temporary fixture tree (allowlist + lockfiles) so the check's real
 // behaviour is exercised without touching the repo's real lockfiles.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /** Parses deps-allowlist.txt into { npm: Set, cargo: Set } by section. */
 export function parseAllowlist(text) {
@@ -128,6 +129,10 @@ function main() {
   process.exitCode = 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Only run as a CLI when invoked directly (not when imported by tests).
+// See the note in check-zero-network.mjs: a hand-built `file://` + path
+// string is false for any URL-encoded path and for every Windows path, which
+// would make this CI gate exit 0 without ever reading a lockfile.
+if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) {
   main();
 }
