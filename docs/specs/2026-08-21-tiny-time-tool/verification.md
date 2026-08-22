@@ -728,6 +728,46 @@ easier to write than the real one, and it looks identical once it is green. Only
 the drill through the guard, and only ever trusting a test that has been watched failing,
 separates them.
 
+### F14 — 84 WCAG AA contrast failures, found while preparing the gate itself
+
+Design principle 8 sets **WCAG AA as a floor**. Measuring the full S14 screenshot set —
+3,124 text/background pairs across every surface, both themes, both locales — turned up
+**84 failures, all in the light theme**, all traceable to four palette tokens:
+
+| Token | Was | Ratio on white | Required |
+|---|---|---|---|
+| `--color-state-running` | `#2f9e5c` | **3.41** | 4.5 |
+| `--color-state-paused` | `#d68a1f` | **2.79** | 4.5 |
+| `--color-danger` | `#d94f4f` | **4.05** | 4.5 |
+| `--color-accent` | `#2f6fed` | **4.25** (as rendered) | 4.5 |
+
+The coordinator recomputed two of these independently from the hex values and got exactly
+the reported figures, so the measurement is trustworthy rather than merely plausible.
+
+These are the colours carrying **running/paused state, error text, the danger action and
+the undo link** — the highest-consequence text in the app, and the places a user most
+needs to read quickly. They were introduced in S1's token file and no gate could see
+them: the design-token check enforces that values *come from tokens*, not that the tokens
+*are legible*.
+
+Darkened to clear 4.5 with headroom on both `#ffffff` and `#f7f7f8` — running `#1b7340`
+(5.88), paused `#965d0c` (5.43), danger `#c0392b` (5.44), accent `#2563d4` (5.51). Hue
+families unchanged; the exact shades are Ben's to tune at the gate. **The dark theme
+measured clean and is untouched.**
+
+### The overflow sweep: 164 records, none of them defects
+
+The same sweep flagged 164 overflow records. Every genuinely *clipped* one (48) is
+`settings__visuallyHidden` — the screen-reader-only label added in S12, which clips **by
+design**; that is what the sr-only pattern is. The rest are `popover__entryName`,
+`insights__taskName` and `quick-entry__suggestion` overflowing with long **user-supplied
+task names**, all `clipped: false` because those elements carry `text-overflow: ellipsis`.
+
+Worth stating because it marks a real boundary: **S13b's audit covered UI copy, not user
+data.** Interface strings are finite and translatable and were measured against real
+surface widths. Task names are arbitrary and always need truncation; ellipsis is the
+designed answer, not a failure.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -761,7 +801,7 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
   inherited from an implementer's report. Six mechanical gates now run in CI:
   zero-network, deps-allowlist, browser-safe imports, design tokens, i18n coverage,
   and no-hardcoded-strings.
-- Found broken and repaired: **11** — F1 (both Windows zero-network gates vacuous),
+- Found broken and repaired: **12** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
   by CI within minutes of the repo going public), F4 (`node:crypto` in the frontend
