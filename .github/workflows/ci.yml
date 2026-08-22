@@ -68,6 +68,22 @@ jobs:
       - name: Check design tokens
         run: node scripts/check-design-tokens.mjs
 
+      # i18n coverage (S13a): the type system already makes a MISSING es key
+      # a compile error, so this gate exists for what it cannot see — an es
+      # value identical to the en one, an empty es value, and a key that is
+      # translated in both catalogs but rendered by nothing. That last case
+      # was live: the five tray.* keys were complete for twelve slices while
+      # the native menu was hardcoded English in Rust.
+      - name: Check i18n coverage
+        run: node scripts/check-i18n-coverage.mjs
+
+      # No hardcoded strings (S13a): CLAUDE.md #4 requires every UI string to
+      # go through the i18n layer. Parsed with the TypeScript compiler API,
+      # so "JSX child or attribute value" is answered by the grammar rather
+      # than by a regex that would flag className and get suppressed.
+      - name: Check no hardcoded strings
+        run: node scripts/check-no-hardcoded-strings.mjs
+
       # Unsigned by design (BUILD_SPEC Non-goals: "No code signing in v1").
       # Neither platform has a signing identity configured here, and the
       # Tauri bundler doesn't require one — this must not fail the build.

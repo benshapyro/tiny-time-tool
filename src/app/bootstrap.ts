@@ -85,6 +85,7 @@ import type { SettingsActionPayload } from "../settings/settingsEvents";
 import { tauriUpdateOpener } from "../settings/tauriUpdateOpener";
 import { createTauriSqlDriver } from "../timer/tauriSqlDriver";
 import { TimerEngine } from "../timer/timerEngine";
+import { pushTrayLabels } from "../tray/tauriTrayLabelDriver";
 
 // S5: mirrors `TRAY_CLICKED_EVENT` in `src-tauri/src/tray.rs` — Rust only
 // emits this on a tray-icon left-click; deciding what it means
@@ -141,6 +142,15 @@ async function run(): Promise<Bootstrapped> {
   // above already establishes for shortcuts.
   const persistedLanguage = await getLanguageSetting(sqlDriver);
   const locale: Locale = resolveLocale(persistedLanguage, detectSystemLocale());
+
+  // S13a: the native tray menu is built in Rust at startup, before this file
+  // has run, so it opens in English (`TrayLabels::default()`). This is the
+  // first moment anything knows the resolved locale, so it is where the real
+  // strings get pushed — a session that starts in Spanish gets a Spanish tray
+  // without the user touching Settings. Deliberately not awaited: the tray is
+  // ambient chrome, and the timer must not wait on it (BUILD_SPEC "speed is
+  // the aesthetic"). `pushTrayLabels` swallows its own failures.
+  void pushTrayLabels(locale);
 
   const panel = new QuickEntryController({
     engine,
@@ -509,7 +519,15 @@ async function run(): Promise<Bootstrapped> {
         // stick.
         void settings.setLanguage(action.language).then(() => {
           const newLocale = resolveLocale(action.language, detectSystemLocale());
-          return applyLocaleLive(newLocale, { panel, dashboard, insights, popover, reminders });
+          return applyLocaleLive(newLocale, {
+            panel,
+            dashboard,
+            insights,
+            popover,
+            reminders,
+            // S13a: the sixth target — the native tray menu and tooltip.
+            tray: pushTrayLabels,
+          });
         });
         return;
       case "setTheme":

@@ -2,7 +2,6 @@
 // state machine, parsing, exports) lands in TS from S2 onward where it's
 // unit-testable without a native harness.
 
-use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 mod os_integration;
@@ -45,8 +44,17 @@ fn set_tray_state(
     state: tray::TrayState,
     elapsed_seconds: u64,
 ) -> Result<(), String> {
-    let tray_icon = app.state::<tauri::tray::TrayIcon<tauri::Wry>>();
-    tray::set_tray_state(&tray_icon, state, elapsed_seconds).map_err(|e| e.to_string())
+    tray::set_tray_state(&app, state, elapsed_seconds).map_err(|e| e.to_string())
+}
+
+/// S13a: the other half of the tray's i18n. The native tray menu is built
+/// before the webview exists and so cannot call `t()`; `src/tray/
+/// trayLabels.ts` resolves the five `tray.*` keys for the current locale and
+/// pushes them here, at boot and on every language change. Rust stays thin —
+/// it applies strings, it does not choose them.
+#[tauri::command]
+fn set_tray_labels(app: tauri::AppHandle, labels: tray::TrayLabels) -> Result<(), String> {
+    tray::set_tray_labels(&app, labels).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -85,7 +93,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .invoke_handler(tauri::generate_handler![set_tray_state])
+        .invoke_handler(tauri::generate_handler![set_tray_state, set_tray_labels])
         .setup(|app| {
             tray::build_tray(app)?;
             Ok(())

@@ -14,7 +14,9 @@
     "check:deps-allowlist": "node scripts/check-deps-allowlist.mjs",
     "check:zero-network": "node scripts/check-zero-network.mjs",
     "check:browser-safe": "node scripts/check-browser-safe-imports.mjs",
-    "check:design-tokens": "node scripts/check-design-tokens.mjs"
+    "check:design-tokens": "node scripts/check-design-tokens.mjs",
+    "check:i18n-coverage": "node scripts/check-i18n-coverage.mjs",
+    "check:no-hardcoded-strings": "node scripts/check-no-hardcoded-strings.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",

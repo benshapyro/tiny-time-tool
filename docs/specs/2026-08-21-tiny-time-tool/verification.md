@@ -596,6 +596,45 @@ The other four, all real:
 (S5), switch-commit→tray (S6), away-prompt→shortcut exits (S9), and language→controllers
 here. Every one had passing unit tests on both sides of the gap.
 
+## S13a — localization completeness
+
+Two new gates, bringing the mechanical total to six. Both were drilled by the
+coordinator **against the real catalogs and real components**, not only fixtures — the
+lesson of F7, where a check validated only against its own fixtures passed for three
+slices while missing fourteen real violations.
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 62 | An `es` value **identical to `en`** is an untranslated placeholder | Set `tray.quit` to `"Quit"` in the real `es.ts` | Yes — `"tray.quit" is identical to the en value ("Quit") — untranslated, or add it to IDENTITY_ALLOWED with a reason` | Byte-identical | The type system cannot see this: `es.ts` is `Record<TranslationKey, string>`, so a *present but untranslated* value type-checks fine |
+| 63 | Hardcoded **JSX text** must come from `t()` | Replaced a real `{t(locale, …)}` child with literal copy | Yes — `Settings.tsx:135: hardcoded text "Press any key now"` | Byte-identical | Parsed with the TypeScript compiler API, not regex, so "child vs attribute" is answered by the grammar |
+| 64 | Hardcoded **user-facing attributes** must come from `t()` | Added `placeholder="Type here"` to a real input | Yes — `Settings.tsx:203: hardcoded placeholder="Type here"` | Byte-identical | `className`, `data-testid` and `role` are deliberately not text |
+
+### What the new gates found on their first run against real code
+
+**The hardcoded-strings lint found zero violations** across twelve slices of UI. That is
+a genuine zero rather than a vacuous one — the lint was drilled three separate ways
+against real components immediately afterwards and fires precisely each time. The rule
+held because every slice brief demanded it and the per-slice design reviews checked it;
+this makes it mechanical rather than a matter of continued diligence.
+
+**The coverage check found something better than a missing translation.**
+`settings.autostart.title` existed in **both** catalogs with **nothing rendering it** —
+an orphaned key that turned out to mark a **missing UI element**: the autostart group had
+no heading while every other group in Settings had one. Found by the unused-key half of
+the check, not by eye. A translation that nothing displays is usually a sign the display
+is missing, not the translation.
+
+### The tray gap was closed, not allowlisted
+
+`tray.rs` hardcoded its menu labels and tooltips in English because the native menu is
+built before the webview's JS runtime exists. That was defensible until S12 shipped the
+language setting and made it reachable: a Spanish app with an English tray menu.
+
+Rather than allowlist it, S13a added a `TrayLabels` struct and a `set_tray_labels`
+command, with TS resolving the labels per locale and pushing them at boot and on every
+language change. The English strings that remain in `tray.rs` are `Default::default()` —
+the pre-JS fallback for the first instants of launch, documented as such.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -622,11 +661,13 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S12. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S13a. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **61 of 61** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
-  3 S10, 3 S11, 4 S12), every one re-run by the coordinator rather than inherited from
-  an implementer's report.
+- Checks verified: **64 of 64** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
+  3 S10, 3 S11, 4 S12, 3 S13a), every one re-run by the coordinator rather than
+  inherited from an implementer's report. Six mechanical gates now run in CI:
+  zero-network, deps-allowlist, browser-safe imports, design tokens, i18n coverage,
+  and no-hardcoded-strings.
 - Found broken and repaired: **10** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
