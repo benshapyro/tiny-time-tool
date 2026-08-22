@@ -98,10 +98,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-3);
   border: var(--border-width-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
+}
+
+.log__entry--editing {
+  align-items: stretch;
+  flex-direction: column;
 }
 
 .log__entryMain {
@@ -151,6 +157,198 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
+}
+
+.log__entryActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.log__actionButton {
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition:
+    background var(--motion-duration-fast) var(--motion-easing-standard),
+    border-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.log__actionButton:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.log__actionButton--danger {
+  color: var(--color-danger);
+}
+
+.log__actionButton--danger:hover:not(:disabled) {
+  border-color: var(--color-danger);
+}
+
+.log__actionButton:disabled {
+  color: var(--color-state-idle);
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+/* Edit form (S7) — one entry's rename/tag/time editor, replacing its
+   static row in place. Tokens only, same rule as the rest of this file. */
+.log__editForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.log__editRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.log__editLabel {
+  flex: 0 0 auto;
+  min-width: 4.5em;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.log__editInput {
+  flex: 1;
+  min-width: 0;
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  padding: var(--space-2) var(--space-3);
+}
+
+.log__editInput--time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.log__editRunningNote {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-state-running);
+}
+
+.log__editError {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width-hairline) solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.log__editActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.log__editSave {
+  border: var(--border-width-hairline) solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition: background var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.log__editSave:hover {
+  background: var(--color-accent-hover);
+}
+
+.log__editCancel {
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition: background var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.log__editCancel:hover {
+  background: var(--color-surface-raised);
+}
+
+/* Undo toast (S7) — replaces a confirmation dialog on delete, this
+   project's established pattern (the Switch action never confirms
+   either). Placed above the entries list, below the day's date nav. */
+.log__undoToast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.log__undoMessage {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.log__undoActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.log__undoAction {
+  border: none;
+  background: transparent;
+  color: var(--color-accent);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  padding: 0;
+  cursor: pointer;
+}
+
+.log__undoAction:hover {
+  color: var(--color-accent-hover);
+}
+
+.log__undoDismiss {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
+  padding: 0;
+  cursor: pointer;
 }
 
 .log__total {

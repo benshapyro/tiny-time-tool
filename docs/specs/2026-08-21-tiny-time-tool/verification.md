@@ -238,6 +238,68 @@ The ticking timer renders elapsed time as `M:SS`, so a paused 22-minute entry di
 The format is pinned (decision #52) and the run does not relitigate pinned decisions, so
 this is recorded for Ben's S14 rubric rather than changed.
 
+## S6 — Dashboard Log tab
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 36 | Design-token gate detects a literal | Neutered the pixel detector | Yes — `expected [] to have a length of 1` | Byte-identical | New gate; see F7 |
+| 37 | Design-token gate detects **unitless** design values | Disabled the `line-height`/`opacity` matcher | Yes | Byte-identical | Added after review found both sitting in a file the gate called clean |
+| 38 | The Log follows **today** across midnight | Removed the re-pin in `refresh()` | Yes — `expected '2026-08-21' not to be '2026-08-21'` | Byte-identical | See F8 |
+
+### F7 — three slices of "tokens only" were certified by a check that could not see
+
+The coordinator's own CSS spot-check was `grep … | grep -v "var("`, which drops any
+line mentioning a token **even when the same line also carries a literal**. So
+`border: 1px solid var(--color-border)` read as clean. **Fourteen literals** accumulated
+across four stylesheets while three consecutive slices reported "tokens only, no
+literals". A reviewer caught one instance in S5; that was treated as a slip rather than
+as evidence the check was blind.
+
+Replaced with `scripts/check-design-tokens.mjs`, wired into `npm test` and CI, and
+validated against `main`'s real CSS rather than a self-authored fixture: exit 1 there,
+exit 0 on the fixed tree.
+
+**The gate then had the same class of blind spot twice more, both found in review:** its
+comment handling was `line.split("/*")[0]`, which hid violations following an inline
+comment *and* scanned continuation lines of block comments as CSS; and it looked only
+for colours and pixels, missing `line-height: 1` and `opacity: 0.5`. Both fixed with
+tests. A first attempt at the unitless matcher was anchored to a whole line and matched
+nothing inline — it passed its own fixtures while finding zero violations.
+
+### F8 — the Dashboard showed yesterday after midnight
+
+`#viewedDate` was pinned once at construction. The Dashboard is the app's main window,
+so staying open overnight is the normal case — and after midnight it kept repainting the
+previous day. A task started after midnight never appeared, and the only recovery was
+clicking "Today". Now the view follows today while the user has not navigated away and
+stays pinned when they have; both halves are tested, because dragging a user off a past
+day they deliberately opened would be a different bug rather than a fix.
+
+## S7 — full editing in the Log
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 39 | delete → undo restores the row **byte-identical** | `restoreEntry` minted a fresh uuid instead of reusing the entry's id | Yes — `FOREIGN KEY constraint failed` | Byte-identical | The DB itself refuses the corrupted restore — a stronger signal than an inequality. The test compares **raw `SELECT *` rows**, not engine-mapped objects |
+| 40 | Overlapping-times edit is **rejected** | Removed the `throw new OverlapError()` | Yes — `expected null not to be null` (the designed inline error never appeared) | Byte-identical | Overlap is checked against every other segment in the database, not per-entry or per-day |
+| 41 | A running entry exposes **no** end-time control | Inverted the branch so the End input always renders | Yes — `expected document not to contain element, found <input` | Byte-identical | The **absence** is the thing under test; the test also asserts `Start` *is* found, so a typo in the selector cannot fake a pass |
+| 42 | Every successful mutation notifies the other surfaces | Removed the `onEngineMutated` calls | Yes — `expected "vi.fn()" to be called 1 times, but got 0` | Byte-identical | Editing history changes day totals the popover and tray display. S5 and S6 both shipped this gap; S7 tests for it |
+
+### Scope decisions recorded for Ben, not silently absorbed
+
+- **Delete is refused on the running or paused entry** (engine-level error plus a
+  disabled, explained button). The S7 row says "delete … any day" without carving this
+  out, but deleting the entry the engine is actively tracking would corrupt its internal
+  pointers. Conservative reading; worth an explicit sign-off since it is a behaviour
+  decision.
+- **Native `<input type="time">` follows the OS locale, not the app's.** A user who
+  picks Spanish in Settings while their OS stays en-US will see AM/PM inside the
+  time-picker fields while the rest of the surface is 24-hour. There is no standard HTML
+  way to force this; fixing it means a custom picker. Named residual for S12/S13b.
+- **Multi-segment entries** expose only first-segment start and last-segment end;
+  internal pause/resume boundaries are not editable in this slice.
+- **The undo toast has no auto-dismiss timer** — it persists until acted on, is replaced
+  by a second delete, or is cleared by day navigation.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -264,19 +326,24 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 through S5. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 through S7. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **35 of 35** (12 in S1, 6 in S2, 7 in S3, 6 in S4, 4 in S5), every one
+- Checks verified: **42 of 42** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7), every one
   re-run by the coordinator rather than inherited from an implementer's report.
-- Found broken and repaired: **6** — F1 (both Windows zero-network gates vacuous),
+- Found broken and repaired: **8** — F1 (both Windows zero-network gates vacuous),
   F2 (CRLF disabling the Windows test suite), and F3 (unclosed SQLite handles failing
   `rmSync` with EPERM on Windows — invisible on macOS, already copied into S3, caught
   by CI within minutes of the repo going public), F4 (`node:crypto` in the frontend
   bundle — the shipped app could not render, and every existing gate passed it), and
   F5 (the panel clipped its own suggestion list, found by looking at a screenshot), and
-  F6 (the first-launch teach line showed the raw Tauri token `CmdOrCtrl+Shift+Space`).
-  **Three of the six were found by looking at screenshots or reading a mechanism, not
-  by a failing test** — which is the strongest argument for keeping both practices.
+  F6 (the first-launch teach line showed the raw Tauri token `CmdOrCtrl+Shift+Space`),
+  F7 (three slices of "tokens only" certified by a check that could not see literals),
+  and F8 (the Dashboard repainted yesterday after midnight).
+  **Five of the eight were found by looking at a screenshot, reading a mechanism, or
+  reading across module boundaries — not by a failing test.** That ratio has held
+  steady for five slices and is the strongest argument for keeping all three practices.
+  F7 is the sharpest: the failing check was the coordinator's own, and it had already
+  been contradicted once before anyone thought to test the check itself.
 - Drills rejected as invalid before scoring: **6** — two in S2 (a no-op sabotage and one
   red for the wrong reason) and four in S3 (three no-ops plus a comment-only "break"
   that made a real check look unguarded). All redone. Recorded because a drill harness

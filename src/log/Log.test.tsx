@@ -20,6 +20,9 @@ function baseState(overrides: Partial<LogState> = {}): LogState {
     entries: [],
     totalLabel: "0m",
     emptyStateTeachLine: null,
+    editingEntryId: null,
+    editError: null,
+    pendingUndo: null,
     ...overrides,
   };
 }
@@ -34,6 +37,12 @@ function renderLog(overrides: Partial<React.ComponentProps<typeof Log>> = {}) {
     onToday,
     onPrevious,
     onNext,
+    onBeginEdit: vi.fn(),
+    onCancelEdit: vi.fn(),
+    onSaveEdit: vi.fn(),
+    onDelete: vi.fn(),
+    onUndo: vi.fn(),
+    onDismissUndo: vi.fn(),
     ...overrides,
   };
   const result = render(<Log {...props} />);
@@ -48,20 +57,28 @@ describe("Log — day view", () => {
           {
             id: "1",
             name: "Acme onboarding",
+            rawName: "Acme onboarding",
             startLabel: "9:00 AM",
             endLabel: "10:30 AM",
             durationLabel: "1h 30m",
             client: "acme",
             project: "rollout",
+            isRunning: false,
+            startIso: new Date(2026, 7, 22, 9, 0).toISOString(),
+            endIso: new Date(2026, 7, 22, 10, 30).toISOString(),
           },
           {
             id: "2",
             name: "Aug 22 · 11:00 AM–11:45 AM",
+            rawName: null,
             startLabel: "11:00 AM",
             endLabel: "11:45 AM",
             durationLabel: "45m",
             client: null,
             project: null,
+            isRunning: false,
+            startIso: new Date(2026, 7, 22, 11, 0).toISOString(),
+            endIso: new Date(2026, 7, 22, 11, 45).toISOString(),
           },
         ],
         totalLabel: "2h 15m",
@@ -88,11 +105,15 @@ describe("Log — day view", () => {
           {
             id: "1",
             name: "Deep work",
+            rawName: "Deep work",
             startLabel: "1:00 PM",
             endLabel: "1:35 PM",
             durationLabel: "35m",
             client: null,
             project: null,
+            isRunning: false,
+            startIso: new Date(2026, 7, 22, 13, 0).toISOString(),
+            endIso: new Date(2026, 7, 22, 13, 35).toISOString(),
           },
         ],
       }),
@@ -118,11 +139,15 @@ describe("Log — day view", () => {
           {
             id: "1",
             name: "Deep work",
+            rawName: "Deep work",
             startLabel: "1:00 PM",
             endLabel: "1:35 PM",
             durationLabel: "35m",
             client: null,
             project: null,
+            isRunning: false,
+            startIso: new Date(2026, 7, 22, 13, 0).toISOString(),
+            endIso: new Date(2026, 7, 22, 13, 35).toISOString(),
           },
         ],
         emptyStateTeachLine: null,
@@ -187,6 +212,12 @@ describe("Log — date navigation controls", () => {
         onToday={onToday}
         onPrevious={vi.fn()}
         onNext={vi.fn()}
+        onBeginEdit={vi.fn()}
+        onCancelEdit={vi.fn()}
+        onSaveEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onUndo={vi.fn()}
+        onDismissUndo={vi.fn()}
       />,
     );
     const todayButton = screen.getByRole("button", { name: "Today" });

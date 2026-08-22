@@ -52,8 +52,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { Locale } from "../i18n";
-import { LOG_ACTION_EVENT, LOG_STATE_EVENT } from "../log/logEvents";
-import type { LogActionPayload } from "../log/logEvents";
+import { LOG_ACTION_EVENT, LOG_EDIT_ACTION_EVENT, LOG_STATE_EVENT } from "../log/logEvents";
+import type { LogActionPayload, LogEditActionPayload } from "../log/logEvents";
 import { LogController } from "../log/logController";
 import { PANEL_COMMIT_EVENT, PANEL_INPUT_EVENT, PANEL_STATE_EVENT } from "../panel/panelEvents";
 import type { PanelCommitPayload, PanelInputPayload } from "../panel/panelEvents";
@@ -110,12 +110,23 @@ async function run(): Promise<Bootstrapped> {
     },
   });
 
-  // S6: the Log tab is read-only (no start/pause/stop/rename methods of its
-  // own — full editing lands in S7) but it must still observe mutations
-  // any OTHER surface makes to the shared engine while the Dashboard is
-  // open. Same cross-module lesson S5's review left behind: "ask what else
-  // must observe that change." `dashboard.refresh()` is wired into every
-  // seam below that already exists to keep the tray/popover in sync.
+  // S6: the Log tab observes mutations any OTHER surface makes to the
+  // shared engine while the Dashboard is open. Same cross-module lesson
+  // S5's review left behind: "ask what else must observe that change."
+  // `dashboard.refresh()` is wired into every seam below that already
+  // exists to keep the tray/popover in sync.
+  //
+  // S7 adds the reverse direction: the Log tab now mutates the engine too
+  // (rename/tag/time edits, delete, undo), so it needs its OWN seam back
+  // out to every other surface — `onEngineMutated`, fired after every edit
+  // that actually changed something. Wired to `popover.refresh()`, which
+  // already re-syncs the tray via its own `onTrayStateChange` (below) —
+  // same one-call-covers-both trick `PANEL_COMMIT_EVENT`'s handler already
+  // uses further down. The quick-entry panel is deliberately NOT wired
+  // here: its only state is an in-progress, uncommitted text buffer for
+  // whatever entry is being named right now, never a read of historical
+  // data, so a Log edit has nothing in it to invalidate — see
+  // `logController.ts`'s module doc comment for the full reasoning.
   const dashboard = new LogController({
     engine,
     locale: LOCALE,
@@ -123,6 +134,7 @@ async function run(): Promise<Bootstrapped> {
     onStateChange: (state) => {
       void emit(LOG_STATE_EVENT, state);
     },
+    onEngineMutated: () => popover.refresh(),
   });
 
   const popover = new PopoverController({
@@ -237,6 +249,50 @@ async function run(): Promise<Bootstrapped> {
         return;
       default: {
         const exhaustive: never = event.payload.action;
+        return exhaustive;
+      }
+    }
+  });
+
+  // S7: the Log tab's edit/delete/undo actions relay the same way — see
+  // logEvents.ts. Each mutating action refreshes and re-pushes state via
+  // the controller's own onStateChange (already wired above), and — when
+  // it actually mutated anything — fires onEngineMutated to reach the
+  // other surfaces (also wired above).
+  await listen<LogEditActionPayload>(LOG_EDIT_ACTION_EVENT, (event) => {
+    const { action } = event.payload;
+    switch (action.type) {
+      case "beginEdit":
+        dashboard.beginEdit(action.entryId);
+        return;
+      case "cancelEdit":
+        dashboard.cancelEdit();
+        return;
+      case "saveEdit":
+        void dashboard.saveEdit(action.entryId, {
+          name: action.name,
+          client: action.client,
+          project: action.project,
+          start: action.start,
+          end: action.end,
+        });
+        return;
+      case "delete":
+        void dashboard.deleteEntry(action.entryId).catch(() => {
+          // Defense-in-depth guard (e.g. CannotDeleteRunningEntryError) —
+          // the Log UI already disables Delete for the running entry, so
+          // this path shouldn't be reachable live; swallow rather than
+          // crash the window on an unexpected click.
+        });
+        return;
+      case "undoDelete":
+        void dashboard.undoDelete();
+        return;
+      case "dismissUndo":
+        dashboard.dismissUndo();
+        return;
+      default: {
+        const exhaustive: never = action;
         return exhaustive;
       }
     }
