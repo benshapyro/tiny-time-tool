@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { en } from "./en";
 import { es } from "./es";
-import { formatDisplayTime, formatFixedTime, formatShortDate, interpolate, t } from "./index";
+import { formatDisplayTime, formatFixedTime, formatLongDate, formatShortDate, interpolate, t } from "./index";
 
 describe("i18n smoke", () => {
   it("renders distinct expected literals for the same key in en and es", () => {
@@ -125,6 +125,57 @@ describe("S4 quick-entry panel strings (both locales required, es idiomatic)", (
     const esNotice = t("es", "panel.switchNotice");
     expect(esNotice).not.toMatch(/\bwill stop\b/i);
     expect(esNotice).toMatch(/detendrá/i);
+  });
+});
+
+describe("locale-aware long-date formatter (S6: the Log tab's date-nav header)", () => {
+  it("formats en as full weekday, month, day, year", () => {
+    expect(formatLongDate("en", new Date(2026, 7, 20))).toBe("Thursday, August 20, 2026");
+  });
+
+  it("formats es idiomatically (lowercase weekday, 'de' joins day/month/year)", () => {
+    expect(formatLongDate("es", new Date(2026, 7, 20))).toBe("jueves, 20 de agosto de 2026");
+  });
+});
+
+describe("S6 Log tab strings (both locales required, es idiomatic)", () => {
+  it("dashboard.tab.log and log.nav.* render distinct non-empty literals in en and es", () => {
+    for (const key of [
+      "dashboard.tab.log",
+      "log.nav.today",
+      "log.nav.previous",
+      "log.nav.next",
+      "log.entriesLabel",
+      "log.totalLabel",
+    ] as const) {
+      const enText = t("en", key);
+      const esText = t("es", key);
+      expect(enText.length).toBeGreaterThan(0);
+      expect(esText.length).toBeGreaterThan(0);
+      expect(enText).not.toBe(esText);
+    }
+  });
+
+  it("log.emptyState carries the {shortcut} placeholder in en and es", () => {
+    for (const locale of ["en", "es"] as const) {
+      expect(t(locale, "log.emptyState")).toContain("{shortcut}");
+    }
+  });
+
+  it("es Log strings are idiomatic — 'Registro' for the tab, 'Hoy' for today, no leftover English", () => {
+    expect(t("es", "dashboard.tab.log")).toBe("Registro");
+    expect(t("es", "log.nav.today")).toBe("Hoy");
+    expect(t("es", "log.nav.previous")).toBe("Día anterior");
+    expect(t("es", "log.nav.next")).toBe("Día siguiente");
+    expect(t("es", "log.entriesLabel")).toBe("Entradas");
+    expect(t("es", "log.totalLabel")).toBe("Total del día");
+    // "log"/"today"/"previous"/"next"/"entries" have no correct Spanish
+    // cognate, so their presence would mean untranslated English leaked
+    // through; "total" is excluded from this ban list deliberately — it is
+    // the correct idiomatic Spanish word too (same spelling), not a calque.
+    for (const key of ["log.nav.previous", "log.nav.next", "log.entriesLabel", "log.emptyState"] as const) {
+      expect(t("es", key)).not.toMatch(/\b(log|today|previous|next|entries)\b/i);
+    }
   });
 });
 

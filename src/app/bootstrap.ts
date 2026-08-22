@@ -18,21 +18,29 @@
 //     2026-08-22 amendment ("pause must be visible, not modal") — and (S5)
 //     also refreshes the popover's view, so it stays correct even if it
 //     wasn't open when the state changed (e.g. a shortcut press while the
-//     popover is closed).
+//     popover is closed). (S6) also refreshes the Dashboard's Log tab
+//     (`LogController`, below), for the same reason — see its own module
+//     doc comment on the cross-module obligation this creates.
 //
 // The "panel" and "popover" windows are SEPARATE webview/JS contexts (no
 // shared memory with "main"), so `QuickEntryController`/`PopoverController`
 // state reaches them only over Tauri's cross-window event bus
-// (`panelEvents.ts` / `popoverEvents.ts`) — never a shared JS object.
-// `core:event:default` (listen/emit) is already part of `core:default`,
-// already granted to every window in `src-tauri/capabilities/default.json`.
+// (`panelEvents.ts` / `popoverEvents.ts`) — never a shared JS object. The
+// Dashboard's Log tab (S6, `LogController`/`logEvents.ts`) happens to
+// render in this SAME "main" window, but is wired the identical way on
+// purpose — one consistent pattern for "a controller talks to a live
+// window," not a special case for the one surface that could technically
+// skip the event bus. `core:event:default` (listen/emit) is already part
+// of `core:default`, already granted to every window in
+// `src-tauri/capabilities/default.json`.
 //
 // No unit test for the IPC glue itself (same reasoning as
 // `tauriSqlDriver.ts` / `tauriShortcutDriver.ts` — stubbing Tauri's bridge
 // would only prove the stub). The business logic this wires together
-// (`ShortcutController`, `QuickEntryController`, `PopoverController`) is
-// exercised in `panelWiring.test.ts` / `popoverController.test.ts` against
-// fakes; this file's real behaviour is exercised live, at the S14
+// (`ShortcutController`, `QuickEntryController`, `PopoverController`,
+// `LogController`) is exercised in `panelWiring.test.ts` /
+// `popoverController.test.ts` / `logController.test.ts` against fakes/real
+// fixture DBs; this file's real behaviour is exercised live, at the S14
 // manual-check gate and the S4 spike.
 //
 // Runs exactly once, and only from the "main" window — the "panel"/
@@ -44,6 +52,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { Locale } from "../i18n";
+import { LOG_ACTION_EVENT, LOG_STATE_EVENT } from "../log/logEvents";
+import type { LogActionPayload } from "../log/logEvents";
+import { LogController } from "../log/logController";
 import { PANEL_COMMIT_EVENT, PANEL_INPUT_EVENT, PANEL_STATE_EVENT } from "../panel/panelEvents";
 import type { PanelCommitPayload, PanelInputPayload } from "../panel/panelEvents";
 import { QuickEntryController } from "../panel/quickEntryController";
@@ -71,6 +82,7 @@ export interface Bootstrapped {
   shortcuts: ShortcutController;
   panel: QuickEntryController;
   popover: PopoverController;
+  dashboard: LogController;
 }
 
 let bootstrapped: Promise<Bootstrapped> | null = null;
@@ -98,6 +110,21 @@ async function run(): Promise<Bootstrapped> {
     },
   });
 
+  // S6: the Log tab is read-only (no start/pause/stop/rename methods of its
+  // own — full editing lands in S7) but it must still observe mutations
+  // any OTHER surface makes to the shared engine while the Dashboard is
+  // open. Same cross-module lesson S5's review left behind: "ask what else
+  // must observe that change." `dashboard.refresh()` is wired into every
+  // seam below that already exists to keep the tray/popover in sync.
+  const dashboard = new LogController({
+    engine,
+    locale: LOCALE,
+    primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+    onStateChange: (state) => {
+      void emit(LOG_STATE_EVENT, state);
+    },
+  });
+
   const popover = new PopoverController({
     engine,
     locale: LOCALE,
@@ -109,8 +136,11 @@ async function run(): Promise<Bootstrapped> {
     // Review finding on S5: the shortcut path synced the tray but the
     // popover path did not, so Start-from-popover left the tray on Idle and
     // Stop-from-popover left it ticking. Same command, both directions.
+    // S6 extends the same fix to the Log tab: a popover action must reach
+    // it too, or the Dashboard would show stale state while open.
     onTrayStateChange: (state, elapsedSeconds) => {
       void invoke("set_tray_state", { state, elapsedSeconds });
+      void dashboard.refresh();
     },
   });
 
@@ -125,6 +155,7 @@ async function run(): Promise<Bootstrapped> {
     onTrayStateChange: (state, elapsedSeconds) => {
       void invoke("set_tray_state", { state, elapsedSeconds });
       void popover.refresh();
+      void dashboard.refresh();
     },
   });
   await shortcuts.registerAll();
@@ -136,7 +167,22 @@ async function run(): Promise<Bootstrapped> {
   });
   await listen<PanelCommitPayload>(PANEL_COMMIT_EVENT, (event) => {
     panel.updateText(event.payload.text);
-    void panel.commit();
+    // S6: a commit here can rename the current entry (naming flow) or stop
+    // one and start another (switching flow) — either changes what the Log
+    // tab should show, so it needs telling even though it caused neither.
+    // A commit changes timer state, so EVERY observer needs telling — not
+    // just the Log. Before this, a switch-commit (stop old, start new) left
+    // the tray icon and the popover showing the previous entry until their
+    // next unrelated refresh. That gap predates S6; it is the same shape as
+    // the S5 review finding where popover actions never reached the tray,
+    // and it is fixed here rather than left for a slice that does not own it.
+    //
+    // `popover.refresh()` fires the popover's own onTrayStateChange, which
+    // is what actually re-syncs the tray, so the tray is covered by the same
+    // call rather than by a second invoke that could drift out of step.
+    void panel
+      .commit()
+      .then(() => Promise.all([dashboard.refresh(), popover.refresh()]));
   });
 
   // The popover window relays button clicks the same way — see
@@ -166,6 +212,27 @@ async function run(): Promise<Bootstrapped> {
     }
   });
 
+  // The Dashboard's Log tab relays date-nav clicks the same way — see
+  // logEvents.ts. Each action refreshes and re-pushes state via the
+  // controller's own onStateChange, already wired above.
+  await listen<LogActionPayload>(LOG_ACTION_EVENT, (event) => {
+    switch (event.payload.action) {
+      case "today":
+        void dashboard.goToday();
+        return;
+      case "previous":
+        void dashboard.goToPreviousDay();
+        return;
+      case "next":
+        void dashboard.goToNextDay();
+        return;
+      default: {
+        const exhaustive: never = event.payload.action;
+        return exhaustive;
+      }
+    }
+  });
+
   // Rust's tray icon click handler (tray.rs) only emits — deciding what a
   // click means (open vs. close, refreshing first) is business logic and
   // stays here, per this project's "Rust stays thin" rule.
@@ -174,6 +241,7 @@ async function run(): Promise<Bootstrapped> {
   });
 
   await popover.refresh();
+  await dashboard.refresh();
 
   // BUILD_SPEC S5: "On first launch the popover auto-opens once" —
   // persisted so a real restart never re-fires it (firstLaunchFlag.ts).
@@ -181,7 +249,7 @@ async function run(): Promise<Bootstrapped> {
     void showPopover();
   }
 
-  return { shortcuts, panel, popover };
+  return { shortcuts, panel, popover, dashboard };
 }
 
 /** The Switch action (popover/reminder, wired by later slices): opens the

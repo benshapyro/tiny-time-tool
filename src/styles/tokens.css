@@ -64,6 +64,12 @@
   /* Size — surface minimums. Not spacing: these are the widths a surface
      must not collapse below, and components must not invent their own. */
   --size-popover-min-width: 280px;
+  --size-dashboard-min-width: 480px;
+
+  /* Border widths — a selected tab's underline and similar emphasis rules.
+     Hairlines are borders, not spacing, so they get their own scale. */
+  --border-width-hairline: 1px;
+  --border-width-emphasis: 2px;
 
   /* Radius */
   --radius-sm: 4px;

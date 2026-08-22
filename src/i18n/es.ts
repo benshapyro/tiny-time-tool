@@ -36,4 +36,12 @@ export const es: Record<TranslationKey, string> = {
   "key.enter": "Intro",
   "key.esc": "Esc",
   "key.tab": "Tab",
+  "dashboard.tabsLabel": "Pestañas del panel",
+  "dashboard.tab.log": "Registro",
+  "log.nav.today": "Hoy",
+  "log.nav.previous": "Día anterior",
+  "log.nav.next": "Día siguiente",
+  "log.entriesLabel": "Entradas",
+  "log.totalLabel": "Total del día",
+  "log.emptyState": "Pulsa {shortcut} para empezar a registrar",
 };
