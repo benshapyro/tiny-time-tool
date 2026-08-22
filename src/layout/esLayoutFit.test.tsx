@@ -85,7 +85,13 @@ function wrappedLines(text: string, contentWidth: number, style: Parameters<type
     if (measureTextWidthUpperBound(candidate, style) <= contentWidth) {
       current = candidate;
     } else {
-      lines += 1;
+      // Only close out a line if one was actually started. When the very
+      // first word is itself wider than the box, `current` is still empty
+      // and there is nothing to wrap away from — incrementing here would
+      // count two lines for one oversized word, contradicting the docstring
+      // above. Later oversized words are different: `current` is non-empty,
+      // so the increment correctly closes the previous line.
+      if (current !== "") lines += 1;
       current = word;
     }
   }
@@ -407,4 +413,31 @@ describe("S13b · the quick-entry panel is tall enough for its content", () => {
       });
     }
   }
+});
+
+// Review finding on S13b: `wrappedLines` contradicted its own docstring when
+// the oversized word was the FIRST one. With `current` still empty there is
+// no line to close out, but the else-branch incremented anyway — two lines
+// counted for one word. Unreachable via the real callers and over-counting
+// (the safe direction for a height budget), which is exactly why it needed a
+// test rather than a note.
+describe("wrappedLines — an oversized word in the leading position", () => {
+  const style = { size: 14, weight: 400 } as const;
+
+  it("a single word wider than the box still takes one line", () => {
+    // Narrow enough that the first word cannot possibly fit.
+    expect(wrappedLines("Incorporación", 10, style)).toBe(1);
+  });
+
+  it("counts the same whether the oversized word leads or follows", () => {
+    const leading = wrappedLines("Incorporación x", 10, style);
+    const following = wrappedLines("x Incorporación", 10, style);
+    expect(leading).toBe(following);
+  });
+
+  it("still counts real wrapping correctly", () => {
+    // A width that fits one short word per line.
+    const lines = wrappedLines("uno dos tres", 30, style);
+    expect(lines).toBeGreaterThan(1);
+  });
 });

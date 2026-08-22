@@ -109,3 +109,50 @@ describe("textMetrics", () => {
     expect(() => measureTextWidth("你", { size: 14, weight: 400 })).toThrow(/no measured advance/);
   });
 });
+
+// Review finding on S13b. The upper bound used `* (1 + MARGIN)`, which is not
+// the inverse of the calibration's error bound: (1 + M)(1 - M) = 1 - M² < 1,
+// so at the edge of the allowed band it returns a value strictly BELOW the
+// real Chrome width. Latent — no real sample sits near the edge — but every
+// fit budget rests on this bound never being narrower than the browser, and a
+// latent bug fixed without a test regresses silently.
+describe("measureTextWidthUpperBound — the invariant at the edge of the band", () => {
+  it("is at least Chrome's width for the worst case the calibration permits", () => {
+    // The calibration allows the model to under-report by up to
+    // MODEL_UNDERESTIMATE_MARGIN. Construct that worst case explicitly:
+    // if modelled is exactly (1 - MARGIN) x chrome, the bound must still
+    // reach chrome.
+    // NOTE: this test must CALL measureTextWidthUpperBound. A first version
+    // computed the bound inline with the same arithmetic and asserted on
+    // that — which tests the arithmetic, not the function, and stayed green
+    // when the function was reverted to the buggy formula. Same shape as F11.
+    const style = { size: 14, weight: 400 } as const;
+    const sample = "Reanudar";
+
+    const raw = measureTextWidth(sample, style);
+    const bound = measureTextWidthUpperBound(sample, style);
+
+    // The bound must be the true inverse of the calibration's error band:
+    // if the model under-reports by the full permitted margin, the bound must
+    // still reach the real width. `raw / (1 - MARGIN)` is that inverse.
+    expect(bound).toBeCloseTo(raw / (1 - MODEL_UNDERESTIMATE_MARGIN), 9);
+
+    // Worst permitted case: a Chrome width the model could legitimately have
+    // under-reported as `raw`. The bound must not fall below it.
+    const worstCaseChrome = raw / (1 - MODEL_UNDERESTIMATE_MARGIN);
+    expect(bound).toBeGreaterThanOrEqual(worstCaseChrome - 1e-9);
+
+    // And the discarded formula must NOT satisfy that — proving the two
+    // differ where it matters rather than being interchangeable.
+    expect(raw * (1 + MODEL_UNDERESTIMATE_MARGIN)).toBeLessThan(worstCaseChrome);
+  });
+
+  it("never returns less than the raw model", () => {
+    for (const sample of ["Reanudar", "Detener", "Copiar hoy para la IA"]) {
+      const style = { size: 14, weight: 400 } as const;
+      expect(measureTextWidthUpperBound(sample, style)).toBeGreaterThanOrEqual(
+        measureTextWidth(sample, style),
+      );
+    }
+  });
+});

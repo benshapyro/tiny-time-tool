@@ -108,7 +108,17 @@ export const MODEL_UNDERESTIMATE_MARGIN = 0.005;
  * fit passes a check that does fit.
  */
 export function measureTextWidthUpperBound(text: string, style: TextStyle): number {
-  return measureTextWidth(text, style) * (1 + MODEL_UNDERESTIMATE_MARGIN);
+  // Divide, do not multiply. The calibration bounds relative error as
+  //   (modelled - chrome) / chrome > -MARGIN   i.e.   chrome < modelled / (1 - MARGIN)
+  // so `modelled / (1 - MARGIN)` is the smallest value guaranteed to be at
+  // least Chrome's. Multiplying by `(1 + MARGIN)` is NOT the same inverse:
+  // (1 + M)(1 - M) = 1 - M² < 1, so at the edge of the allowed band it lands
+  // strictly BELOW the real width — chrome 100, modelled 99.5 gives 99.9975.
+  // Latent rather than failing today (the worst real sample is -0.22% against
+  // a 0.5% margin), but every fit budget in esLayoutFit.test.tsx rests on this
+  // bound never being narrower than the browser, so the formula has to be the
+  // real inverse rather than one that is usually close enough.
+  return measureTextWidth(text, style) / (1 - MODEL_UNDERESTIMATE_MARGIN);
 }
 
 /** Every size/weight pair the calibration covers — used by its own test to

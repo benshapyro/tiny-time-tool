@@ -687,6 +687,47 @@ run ad hoc instead of through the harness whose comment-only guard exists to cat
 Recorded because the lesson is not "be careful": it is that **the guard only works when
 it is used**, and convenience is what routes around it.
 
+### S13b review findings — the measuring instrument itself was wrong
+
+Two findings, both in the machinery the audit depends on, both latent rather than
+actively failing, and both fixed with tests that now pin the invariant.
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 66 | The upper bound is **never narrower than Chrome** | Reverted to `* (1 + MARGIN)` | Yes — `expected 61.9685… to be close to 61.9700…` | Byte-identical | See below; the fix is `/ (1 - MARGIN)` |
+| 67 | An oversized **leading** word still takes one line | Removed the `current !== ""` guard | Yes — `expected 2 to be 1` | Byte-identical | Over-counted, the safe direction — which is why only a test would ever find it |
+
+**Row 66 is the sharper one.** `measureTextWidthUpperBound` multiplied by `(1 + MARGIN)`,
+which is not the inverse of the calibration's error band. The calibration bounds relative
+error as `chrome < modelled / (1 - MARGIN)`, so the guaranteed-safe bound is
+`modelled / (1 - MARGIN)`. Multiplying instead is subtly wrong because
+`(1 + M)(1 - M) = 1 - M² < 1` — at the edge of the permitted band the "upper bound" lands
+*below* the real width. Every fit budget in this slice rests on that bound never being
+narrower than the browser, so the instrument was quietly less safe than its own docstring
+claimed.
+
+### Two self-inflicted verification failures in this slice, both by the coordinator
+
+Recorded because they are the same shapes this file has been cataloguing, committed by
+the person cataloguing them.
+
+**A comment-only sabotage.** The first drill for row 65 stayed green because it changed
+only a *comment* naming the width. `perl -0p` without `/g` takes the first match, and the
+first match was prose — traps (b) and (d) simultaneously. It happened because the drill
+was run ad hoc rather than through the harness whose comment-only guard exists for it.
+
+**A test that never called the function it tested.** The first version of row 66's test
+computed the bound *inline with the same arithmetic* and asserted on that. It therefore
+tested the arithmetic rather than `measureTextWidthUpperBound`, and stayed green when the
+function was reverted to the buggy formula. **This is F11 exactly** — a check written in
+terms of the thing it checks — reproduced by the coordinator who wrote F11 up, three
+slices later.
+
+The pattern is not carelessness. It is that the shortcut version of a check is always
+easier to write than the real one, and it looks identical once it is green. Only running
+the drill through the guard, and only ever trusting a test that has been watched failing,
+separates them.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -715,8 +756,8 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 *Interim — S1 through S13b; all implementation slices complete. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **65 of 65** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
-  3 S10, 3 S11, 4 S12, 3 S13a, 1 S13b), every one re-run by the coordinator rather than
+- Checks verified: **67 of 67** (12 S1, 6 S2, 7 S3, 6 S4, 4 S5, 3 S6, 4 S7, 5 S8, 4 S9,
+  3 S10, 3 S11, 4 S12, 3 S13a, 3 S13b), every one re-run by the coordinator rather than
   inherited from an implementer's report. Six mechanical gates now run in CI:
   zero-network, deps-allowlist, browser-safe imports, design tokens, i18n coverage,
   and no-hardcoded-strings.
