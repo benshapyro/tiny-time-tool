@@ -4,7 +4,8 @@
   "description": "Capability for the main window",
   "windows": [
     "main",
-    "panel"
+    "panel",
+    "popover"
   ],
   "permissions": [
     "core:default",

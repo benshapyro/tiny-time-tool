@@ -1,5 +1,10 @@
 import type { TrayState } from "./trayState";
 
+/** The pinned pause glyph (U+23F8), shared by the tray title and the S5
+ * popover's paused-entry treatment so both surfaces agree on the exact same
+ * symbol without duplicating the literal. */
+export const PAUSE_GLYPH = "⏸";
+
 /**
  * Formats elapsed seconds as ticking tray-title text: `M:SS` under an hour,
  * `H:MM:SS` at or beyond an hour — the common menu-bar-timer convention.
@@ -31,7 +36,7 @@ export function trayTitleForState(state: TrayState, elapsedSeconds: number): str
     case "running":
       return formatElapsed(elapsedSeconds);
     case "paused":
-      return `⏸ ${formatElapsed(elapsedSeconds)}`;
+      return `${PAUSE_GLYPH} ${formatElapsed(elapsedSeconds)}`;
     default: {
       const exhaustive: never = state;
       return exhaustive;

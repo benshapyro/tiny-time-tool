@@ -1,0 +1,158 @@
+/* S5 tray popover styling — tokens only (BUILD_SPEC advisory rule + Design
+   principle 4: "Tokens or it doesn't ship"). No literal colors, spacing, or
+   type values anywhere below. Design principle 3 ("calm surfaces"): the
+   popover shows only what a glance needs — type hierarchy over chrome. */
+
+.popover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  min-width: var(--size-popover-min-width);
+}
+
+.popover__timer {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.popover__elapsed {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.popover__status {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.popover__timer[data-status="running"] .popover__status {
+  color: var(--color-state-running);
+}
+
+.popover__timer[data-status="paused"] .popover__status {
+  color: var(--color-state-paused);
+}
+
+.popover__teach {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+}
+
+.popover__entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.popover__entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+}
+
+.popover__entry[data-status="stopped"] {
+  color: var(--color-text-primary);
+}
+
+.popover__entry[data-status="running"] {
+  color: var(--color-state-running);
+  font-weight: var(--font-weight-medium);
+}
+
+.popover__entry[data-status="paused"] {
+  color: var(--color-state-paused);
+  font-weight: var(--font-weight-medium);
+}
+
+.popover__entryName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover__entryDuration {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.popover__entry[data-status="running"] .popover__entryDuration,
+.popover__entry[data-status="paused"] .popover__entryDuration {
+  color: inherit;
+}
+
+.popover__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.popover__totalValue {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.popover__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.popover__action {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition:
+    background var(--motion-duration-fast) var(--motion-easing-standard),
+    border-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.popover__action:hover {
+  border-color: var(--color-accent);
+}
+
+.popover__action--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-text-inverse);
+}
+
+.popover__action--primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.popover__action--danger:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}

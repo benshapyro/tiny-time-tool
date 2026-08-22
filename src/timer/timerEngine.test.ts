@@ -295,4 +295,66 @@ describe("TimerEngine", () => {
       expect(names).toHaveLength(2);
     });
   });
+
+  describe("entriesForDay (S5: the popover's today-view data source — day attribution by first segment's local start day)", () => {
+    it("returns only entries attributed to the given day, in creation order, each with its segments", async () => {
+      const driver = trackDriver(dbPath);
+      const clock = fixedClock("2026-08-21T09:00:00.000Z");
+      const engine = await TimerEngine.create(driver, clock.now);
+
+      const first = await engine.start({ name: "Morning standup" });
+      clock.advanceTo("2026-08-21T09:15:00.000Z");
+      await engine.stop();
+
+      clock.advanceTo("2026-08-21T13:00:00.000Z");
+      const second = await engine.start({ name: "Acme onboarding" });
+      clock.advanceTo("2026-08-21T14:00:00.000Z");
+      await engine.stop();
+
+      // A different day — must not appear in the 8/21 view.
+      clock.advanceTo("2026-08-22T09:00:00.000Z");
+      await engine.start({ name: "Next-day task" });
+      await engine.stop();
+
+      const day = entryDayKey("2026-08-21T09:00:00.000Z");
+      const rows = await engine.entriesForDay(day);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0]?.entry.id).toBe(first.id);
+      expect(rows[0]?.segments).toHaveLength(1);
+      expect(rows[1]?.entry.id).toBe(second.id);
+    });
+
+    it("returns an empty array for a day with no entries", async () => {
+      const driver = trackDriver(dbPath);
+      const engine = await TimerEngine.create(driver, () => new Date("2026-08-21T09:00:00.000Z"));
+      const rows = await engine.entriesForDay("2026-08-21");
+      expect(rows).toEqual([]);
+    });
+
+    it("includes the currently-running entry (an open segment counts to the day of its start)", async () => {
+      const driver = trackDriver(dbPath);
+      const clock = fixedClock("2026-08-21T09:00:00.000Z");
+      const engine = await TimerEngine.create(driver, clock.now);
+      const entry = await engine.start({ name: "Deep work" });
+
+      const rows = await engine.entriesForDay(entryDayKey("2026-08-21T09:00:00.000Z"));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.entry.id).toBe(entry.id);
+      expect(rows[0]?.segments[0]?.endedAt).toBeNull();
+    });
+
+    it("BUILD_SPEC overnight fixture: an entry starting 23:30 and still open belongs only to the start day", async () => {
+      const driver = trackDriver(dbPath);
+      const start = new Date(2026, 7, 21, 23, 30, 0);
+      const engine = await TimerEngine.create(driver, () => start);
+      await engine.start({ name: "Overnight incident" });
+
+      const startDay = entryDayKey(start.toISOString());
+      const nextDay = entryDayKey(new Date(2026, 7, 22, 0, 45, 0).toISOString());
+
+      expect(await engine.entriesForDay(startDay)).toHaveLength(1);
+      expect(await engine.entriesForDay(nextDay)).toHaveLength(0);
+    });
+  });
 });

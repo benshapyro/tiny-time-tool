@@ -20,6 +20,7 @@
 // second `TimerEngine.create` against the same database file, with no
 // coordination with the first, must reconstruct the same state.
 
+import { entryDayKey } from "./dayAttribution";
 import type { SqlDriver } from "./sqlDriver";
 import type { Segment, TimeEntry } from "./types";
 import { totalDurationSeconds } from "./duration";
@@ -71,6 +72,15 @@ function segmentFromRow(row: SegmentRow): Segment {
     startedAt: row.started_at,
     endedAt: row.ended_at,
   };
+}
+
+/** One entry plus its segments — `entriesForDay`'s row shape. Segments are
+ * included because every downstream consumer (duration, display name) needs
+ * them, and re-querying per entry from the caller would be the same N+1
+ * pattern this method already avoids internally. */
+export interface DayEntry {
+  entry: TimeEntry;
+  segments: Segment[];
 }
 
 export class TimerEngine {
@@ -207,6 +217,44 @@ export class TimerEngine {
       [limit],
     );
     return rows.map((row) => row.name);
+  }
+
+  /** S5: the popover's today-view data source. Day attribution is by the
+   * local calendar day of each entry's *first* segment start (BUILD_SPEC
+   * "Day attribution ... everywhere") — reuses `entryDayKey`, never
+   * reimplements the rule. Two queries total regardless of entry count
+   * (all entries, all segments, joined in memory) rather than one query per
+   * entry — this app's per-day entry count is small, but N+1 queries over
+   * IPC would still be the wrong default to establish. Entries with no
+   * segments (should not occur in practice — every entry gets one at
+   * `start()`) are excluded defensively rather than crashing on an empty
+   * `segments[0]`. Ordered by creation, oldest first, matching every other
+   * chronological listing in this file. */
+  async entriesForDay(dayKey: string): Promise<DayEntry[]> {
+    const entryRows = await this.#driver.select<EntryRow>("SELECT * FROM time_entries ORDER BY created_at ASC");
+    const segmentRows = await this.#driver.select<SegmentRow>("SELECT * FROM segments ORDER BY started_at ASC");
+
+    const segmentsByEntry = new Map<string, Segment[]>();
+    for (const row of segmentRows) {
+      const segment = segmentFromRow(row);
+      const existing = segmentsByEntry.get(segment.entryId);
+      if (existing) {
+        existing.push(segment);
+      } else {
+        segmentsByEntry.set(segment.entryId, [segment]);
+      }
+    }
+
+    const results: DayEntry[] = [];
+    for (const row of entryRows) {
+      const segments = segmentsByEntry.get(row.id);
+      if (!segments || segments.length === 0) continue;
+      const firstSegment = segments[0];
+      if (firstSegment && entryDayKey(firstSegment.startedAt) === dayKey) {
+        results.push({ entry: entryFromRow(row), segments });
+      }
+    }
+    return results;
   }
 
   async entry(entryId: string): Promise<TimeEntry | null> {

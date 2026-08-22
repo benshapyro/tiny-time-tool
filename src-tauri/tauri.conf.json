@@ -31,6 +31,21 @@
         "skipTaskbar": true,
         "focus": false,
         "shadow": true
+      },
+      {
+        "label": "popover",
+        "title": "Tiny Time Tool",
+        "url": "index.html",
+        "width": 320,
+        "height": 420,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "center": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "focus": true,
+        "shadow": true
       }
     ],
     "security": {
