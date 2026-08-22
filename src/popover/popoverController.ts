@@ -28,6 +28,7 @@ import { formatEntryDisplayName } from "../timer/entryDisplayName";
 import { formatDurationHM } from "../timer/formatDuration";
 import type { TimerEngine, TimerState } from "../timer/timerEngine";
 import { currentAcceleratorPlatform, formatAccelerator } from "../shortcuts/formatAccelerator";
+import type { TrayState } from "../tray/trayState";
 
 export type EntryStatus = "running" | "paused" | "stopped";
 
@@ -71,6 +72,14 @@ export interface PopoverControllerOptions {
    * in the real app. Left undefined in tests that don't exercise Switch. */
   onSwitch?: () => void | Promise<void>;
   onStateChange?: (state: PopoverState) => void;
+  /** Fires on every refresh with the resulting tray state and elapsed
+   * seconds. Review finding on S5: popover actions drove the engine but
+   * nothing reached the tray, so pressing Start here left the tray showing
+   * Idle and pressing Stop left it ticking on a stopped timer. The
+   * shortcut path had this wired; the popover path never did. Firing from
+   * `refresh()` rather than from each action means every path that can
+   * change state — including future ones — syncs the tray by construction. */
+  onTrayStateChange?: (state: TrayState, elapsedSeconds: number) => void;
 }
 
 export class PopoverController {
@@ -80,6 +89,7 @@ export class PopoverController {
   readonly #clock: () => Date;
   readonly #onSwitch?: () => void | Promise<void>;
   readonly #onStateChange?: (state: PopoverState) => void;
+  readonly #onTrayStateChange?: (state: TrayState, elapsedSeconds: number) => void;
   #state: PopoverState;
 
   constructor(options: PopoverControllerOptions) {
@@ -89,6 +99,7 @@ export class PopoverController {
     this.#clock = options.clock ?? (() => new Date());
     this.#onSwitch = options.onSwitch;
     this.#onStateChange = options.onStateChange;
+    this.#onTrayStateChange = options.onTrayStateChange;
     this.#state = EMPTY_STATE;
   }
 
@@ -123,7 +134,7 @@ export class PopoverController {
     const elapsedSeconds = currentEntryId ? await this.#engine.durationSeconds(currentEntryId) : 0;
     const teachLine =
       entries.length === 0
-        ? interpolate(t(this.#locale, "popover.teachLine"), { shortcut: formatAccelerator(this.#primaryAccelerator, currentAcceleratorPlatform()) })
+        ? interpolate(t(this.#locale, "popover.teachLine"), { shortcut: formatAccelerator(this.#primaryAccelerator, currentAcceleratorPlatform(), this.#locale) })
         : null;
 
     this.#setState({
@@ -133,6 +144,10 @@ export class PopoverController {
       elapsedSeconds,
       teachLine,
     });
+
+    // Keep the tray in step with whatever just happened, whichever surface
+    // caused it. See `onTrayStateChange` above.
+    this.#onTrayStateChange?.(timerStatus, elapsedSeconds);
   }
 
   async start(): Promise<void> {

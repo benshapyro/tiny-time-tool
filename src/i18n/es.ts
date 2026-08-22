@@ -28,4 +28,12 @@ export const es: Record<TranslationKey, string> = {
   "popover.action.resume": "Reanudar",
   "popover.action.switch": "Cambiar",
   "popover.action.stop": "Detener",
+  "key.ctrl": "Ctrl",
+  "key.alt": "Alt",
+  "key.shift": "Mayús",
+  "key.win": "Win",
+  "key.space": "Espacio",
+  "key.enter": "Intro",
+  "key.esc": "Esc",
+  "key.tab": "Tab",
 };

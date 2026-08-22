@@ -61,6 +61,10 @@
   --motion-duration-base: 200ms;
   --motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
 
+  /* Size — surface minimums. Not spacing: these are the widths a surface
+     must not collapse below, and components must not invent their own. */
+  --size-popover-min-width: 280px;
+
   /* Radius */
   --radius-sm: 4px;
   --radius-md: 8px;

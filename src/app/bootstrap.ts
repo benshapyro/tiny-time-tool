@@ -106,6 +106,12 @@ async function run(): Promise<Bootstrapped> {
     onStateChange: (state) => {
       void emit(POPOVER_STATE_EVENT, state);
     },
+    // Review finding on S5: the shortcut path synced the tray but the
+    // popover path did not, so Start-from-popover left the tray on Idle and
+    // Stop-from-popover left it ticking. Same command, both directions.
+    onTrayStateChange: (state, elapsedSeconds) => {
+      void invoke("set_tray_state", { state, elapsedSeconds });
+    },
   });
 
   const shortcuts = new ShortcutController({

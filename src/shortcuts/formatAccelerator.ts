@@ -17,6 +17,9 @@
 // Pure and platform-parameterised so it is testable without a real OS, and
 // shared: S12's shortcut-rebind UI needs the same rendering.
 
+import type { Locale, TranslationKey } from "../i18n";
+import { t } from "../i18n";
+
 export type AcceleratorPlatform = "macos" | "other";
 
 /** macOS renders modifiers as glyphs with no separator — ⌘⇧Space. */
@@ -34,30 +37,36 @@ const MAC_TOKENS: Record<string, string> = {
 };
 
 /** Windows and Linux spell them out, joined by "+" — Ctrl+Shift+Space. */
-const OTHER_TOKENS: Record<string, string> = {
-  cmdorctrl: "Ctrl",
-  commandorcontrol: "Ctrl",
-  ctrl: "Ctrl",
-  control: "Ctrl",
-  alt: "Alt",
-  option: "Alt",
-  shift: "Shift",
-  super: "Win",
+// Review finding on S5: these were hardcoded English. On Windows or Linux in
+// Spanish that produced "Pulsa Ctrl+Shift+Space para empezar a registrar" —
+// English words inside a Spanish sentence, bypassing the i18n layer. The
+// macOS branch is unaffected: ⌘ ⇧ ⌥ ⌃ are glyphs, not words, and are the same
+// in every language.
+const OTHER_TOKEN_KEYS: Record<string, TranslationKey> = {
+  cmdorctrl: "key.ctrl",
+  commandorcontrol: "key.ctrl",
+  ctrl: "key.ctrl",
+  control: "key.ctrl",
+  alt: "key.alt",
+  option: "key.alt",
+  shift: "key.shift",
+  super: "key.win",
 };
 
-/** Key names that read better spelled out than as a bare token. */
-const KEY_NAMES: Record<string, string> = {
-  space: "Space",
-  enter: "Enter",
-  return: "Enter",
-  esc: "Esc",
-  escape: "Esc",
-  tab: "Tab",
+/** Key names that read better spelled out — localized, for the same reason
+ *  the modifiers are. "Space" is "Espacio" on a Spanish keyboard. */
+const KEY_NAME_KEYS: Record<string, TranslationKey> = {
+  space: "key.space",
+  enter: "key.enter",
+  return: "key.enter",
+  esc: "key.esc",
+  escape: "key.esc",
+  tab: "key.tab",
 };
 
-function prettifyKey(token: string): string {
-  const named = KEY_NAMES[token.toLowerCase()];
-  if (named) return named;
+function prettifyKey(token: string, locale: Locale): string {
+  const key = KEY_NAME_KEYS[token.toLowerCase()];
+  if (key) return t(locale, key);
   // Single characters read best uppercased; leave anything else as authored.
   return token.length === 1 ? token.toUpperCase() : token;
 }
@@ -71,12 +80,19 @@ function prettifyKey(token: string): string {
 export function formatAccelerator(
   accelerator: string,
   platform: AcceleratorPlatform,
+  locale: Locale,
 ): string {
   const parts = accelerator.split("+").filter((p) => p.length > 0);
   if (parts.length === 0) return "";
 
-  const table = platform === "macos" ? MAC_TOKENS : OTHER_TOKENS;
-  const rendered = parts.map((part) => table[part.toLowerCase()] ?? prettifyKey(part));
+  const rendered = parts.map((part) => {
+    const lower = part.toLowerCase();
+    if (platform === "macos") {
+      return MAC_TOKENS[lower] ?? prettifyKey(part, locale);
+    }
+    const modifierKey = OTHER_TOKEN_KEYS[lower];
+    return modifierKey ? t(locale, modifierKey) : prettifyKey(part, locale);
+  });
 
   return platform === "macos" ? rendered.join("") : rendered.join("+");
 }

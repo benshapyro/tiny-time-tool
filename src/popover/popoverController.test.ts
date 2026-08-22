@@ -95,7 +95,7 @@ describe("PopoverController — day view", () => {
     const line = controller.state.teachLine ?? "";
     expect(line).not.toContain("CmdOrCtrl");
     expect(line).toBe(
-      `Press ${formatAccelerator(DEFAULT_ACCELERATORS.primary, currentAcceleratorPlatform())} to start tracking`,
+      `Press ${formatAccelerator(DEFAULT_ACCELERATORS.primary, currentAcceleratorPlatform(), "en")} to start tracking`,
     );
   });
 
@@ -112,7 +112,7 @@ describe("PopoverController — day view", () => {
 
     expect(controller.state.teachLine ?? "").not.toContain("CmdOrCtrl");
     expect(controller.state.teachLine ?? "").toContain(
-      formatAccelerator(DEFAULT_ACCELERATORS.primary, currentAcceleratorPlatform()),
+      formatAccelerator(DEFAULT_ACCELERATORS.primary, currentAcceleratorPlatform(), "es"),
     );
     expect(controller.state.teachLine).not.toMatch(/rastreando/i);
   });
@@ -287,5 +287,31 @@ describe("PopoverController — actions", () => {
 
     expect(onStateChange).toHaveBeenCalledTimes(1);
     expect(onStateChange).toHaveBeenCalledWith(controller.state);
+  });
+});
+
+// Regression for the S5 review finding: popover actions drove the engine but
+// nothing reached the tray, so pressing Start in the popover left the tray
+// icon on Idle and pressing Stop left it ticking on a stopped timer. The
+// shortcut path had this wired; the popover path never did. No existing test
+// caught it because the controller was only ever exercised in isolation.
+describe("PopoverController — tray stays in sync with popover actions", () => {
+  it("reports a tray state for every action, not just for shortcut-driven ones", async () => {
+    const driver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(driver, () => new Date("2026-08-21T09:00:00.000Z"));
+    const seen: string[] = [];
+    const controller = new PopoverController({
+      engine,
+      locale: "en",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+      onTrayStateChange: (state) => seen.push(state),
+    });
+
+    await controller.start();
+    await controller.pause();
+    await controller.resume();
+    await controller.stop();
+
+    expect(seen).toEqual(["running", "paused", "running", "idle"]);
   });
 });

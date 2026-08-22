@@ -27,6 +27,14 @@ export const en = {
   "popover.action.resume": "Resume",
   "popover.action.switch": "Switch",
   "popover.action.stop": "Stop",
+  "key.ctrl": "Ctrl",
+  "key.alt": "Alt",
+  "key.shift": "Shift",
+  "key.win": "Win",
+  "key.space": "Space",
+  "key.enter": "Enter",
+  "key.esc": "Esc",
+  "key.tab": "Tab",
 } as const;
 
 export type TranslationKey = keyof typeof en;
