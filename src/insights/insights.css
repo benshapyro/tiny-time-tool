@@ -1,0 +1,235 @@
+/* S11 Dashboard Insights tab styling — tokens only (BUILD_SPEC advisory rule
+   + Design principle 4: "Tokens or it doesn't ship"). No literal colors,
+   spacing, or type values anywhere below. Design principle 3 ("calm
+   surfaces"): three views, generous space, no chrome beyond what a glance
+   needs — there is nothing to click here at all. */
+
+.insights {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  box-sizing: border-box;
+  padding: var(--space-5);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  min-width: var(--size-dashboard-min-width);
+  max-width: 100%;
+}
+
+.insights__weekLabel {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.insights__empty {
+  margin: 0;
+  padding: var(--space-4);
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  text-align: center;
+}
+
+.insights__views {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.insights__view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.insights__viewTitle {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+/* --- Hours by day --- */
+
+.insights__bars {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.insights__barRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.insights__barLabel {
+  min-width: var(--space-7);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.insights__barTrack {
+  flex: 1;
+  height: var(--space-3);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.insights__barFill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-sm);
+  transition: width var(--motion-duration-base) var(--motion-easing-standard);
+}
+
+.insights__barValue {
+  min-width: var(--space-7);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+/* --- Share by tag --- */
+
+.insights__tagGroups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.insights__tagGroup {
+  flex: 1;
+  min-width: var(--size-popover-min-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.insights__tagGroupTitle {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.insights__tagGroupEmpty {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.insights__tagList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.insights__tagRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.insights__tagName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-base);
+  color: var(--color-accent);
+}
+
+.insights__tagPercent {
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.insights__tagDuration {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Biggest tasks --- */
+
+.insights__tasksEmpty {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.insights__tasks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: insights-task;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.insights__task {
+  counter-increment: insights-task;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.insights__task::before {
+  content: counter(insights-task);
+  min-width: var(--space-5);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.insights__taskName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+}
+
+.insights__taskTags {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.insights__tag {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.insights__tag--client {
+  color: var(--color-accent);
+}
+
+.insights__taskDuration {
+  flex-shrink: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}

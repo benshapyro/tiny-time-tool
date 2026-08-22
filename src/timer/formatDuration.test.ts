@@ -5,7 +5,7 @@
 // examples ("1h 30m", "45m") so the same rule serves both surfaces.
 
 import { describe, expect, it } from "vitest";
-import { formatDurationHM } from "./formatDuration";
+import { formatDurationHM, roundHalfUp } from "./formatDuration";
 
 describe("formatDurationHM", () => {
   it("pads minutes to two digits when hours are present (the S5 fixture: 2h 05m)", () => {
@@ -29,5 +29,28 @@ describe("formatDurationHM", () => {
 
   it("rolls minutes over into hours at 60", () => {
     expect(formatDurationHM(60 * 60)).toBe("1h 00m");
+  });
+});
+
+// S11: `roundHalfUp` is the generic rule `roundMinutesHalfUp` above is built
+// from — Insights' tag-share percentages reuse this SAME function (applied
+// to a ratio*100, not seconds/60) rather than a second rounding rule.
+describe("roundHalfUp", () => {
+  it("rounds exactly .5 up, not to even (banker's rounding would round 61.5 down to 62 too by luck — 60.5 is the real distinguishing case)", () => {
+    expect(roundHalfUp(60.5)).toBe(61);
+    expect(roundHalfUp(61.5)).toBe(62);
+  });
+
+  it("rounds below .5 down", () => {
+    expect(roundHalfUp(61.49)).toBe(61);
+  });
+
+  it("rounds above .5 up", () => {
+    expect(roundHalfUp(61.51)).toBe(62);
+  });
+
+  it("passes whole numbers through unchanged", () => {
+    expect(roundHalfUp(62)).toBe(62);
+    expect(roundHalfUp(0)).toBe(0);
   });
 });

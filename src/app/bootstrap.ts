@@ -56,6 +56,8 @@ import { ExportController } from "../export/exportController";
 import { EXPORT_ACTION_EVENT, EXPORT_STATE_EVENT } from "../export/exportEvents";
 import type { ExportActionPayload } from "../export/exportEvents";
 import type { Locale } from "../i18n";
+import { InsightsController } from "../insights/insightsController";
+import { INSIGHTS_STATE_EVENT } from "../insights/insightsEvents";
 import { LOG_ACTION_EVENT, LOG_EDIT_ACTION_EVENT, LOG_STATE_EVENT } from "../log/logEvents";
 import type { LogActionPayload, LogEditActionPayload } from "../log/logEvents";
 import { LogController } from "../log/logController";
@@ -91,6 +93,7 @@ export interface Bootstrapped {
   popover: PopoverController;
   dashboard: LogController;
   exports: ExportController;
+  insights: InsightsController;
   reminders: ReminderController;
   awayGap: AwayGapController;
 }
@@ -144,7 +147,12 @@ async function run(): Promise<Bootstrapped> {
     onStateChange: (state) => {
       void emit(LOG_STATE_EVENT, state);
     },
-    onEngineMutated: () => popover.refresh(),
+    // S11: an edit here can move an entry into or out of the current week
+    // (or change which tuple/day/tag it counts toward) — Insights needs
+    // telling the same way the popover already does.
+    onEngineMutated: async () => {
+      await Promise.all([popover.refresh(), insights.refresh()]);
+    },
   });
 
   // S10: exports. Unlike `dashboard`/`popover` above, this controller keeps
@@ -157,6 +165,20 @@ async function run(): Promise<Bootstrapped> {
     engine,
     onStateChange: (state) => {
       void emit(EXPORT_STATE_EVENT, state);
+    },
+  });
+
+  // S11: Insights. Read-only (no user-triggered actions, per BUILD_SPEC's
+  // "no date-range builder"), so it fires no `onEngineMutated` seam of its
+  // own — but every mutating surface below (edits, awayGap trims, the
+  // shortcut/panel-commit paths) refreshes it alongside `dashboard`/
+  // `popover`, since any of those can move an entry into or out of the
+  // current week.
+  const insights = new InsightsController({
+    engine,
+    locale: LOCALE,
+    onStateChange: (state) => {
+      void emit(INSIGHTS_STATE_EVENT, state);
     },
   });
 
@@ -200,6 +222,12 @@ async function run(): Promise<Bootstrapped> {
     onTrayStateChange: (state, elapsedSeconds) => {
       void invoke("set_tray_state", { state, elapsedSeconds });
       void dashboard.refresh();
+      // S11: same reasoning as `dashboard.refresh()` above — a state change
+      // reaching here (start/pause/resume/stop from ANY surface, plus
+      // `awayGap`'s trim/keep, which routes through `popover.refresh()`
+      // and so through this same callback) can move the running entry's
+      // time into or out of the current week.
+      void insights.refresh();
     },
   });
 
@@ -434,6 +462,9 @@ async function run(): Promise<Bootstrapped> {
 
   await popover.refresh();
   await dashboard.refresh();
+  // S11: Insights' first paint — same reasoning as `dashboard.refresh()`
+  // above, computed against whatever week `engine`'s real clock is in "now."
+  await insights.refresh();
   // S10: pushes the Export section's initial state (today's date range) to
   // the "main" window the same way `dashboard.refresh()` above does for the
   // Log tab — `exports`'s constructor already computed it; this just emits
@@ -447,7 +478,7 @@ async function run(): Promise<Bootstrapped> {
     void showPopover();
   }
 
-  return { shortcuts, panel, popover, dashboard, exports, reminders, awayGap };
+  return { shortcuts, panel, popover, dashboard, exports, insights, reminders, awayGap };
 }
 
 /** The Switch action (popover/reminder, wired by later slices): opens the
