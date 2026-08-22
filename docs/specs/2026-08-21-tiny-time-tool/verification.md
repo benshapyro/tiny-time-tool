@@ -69,6 +69,44 @@ Both findings share a shape worth naming: **the failure direction was quiet.** N
 would have produced a red run once Windows got past its first error; F1 in particular
 would have reported green forever.
 
+## S2 — timer engine + SQLite persistence
+
+Same provenance rule: every row re-run by the coordinator, not inherited from the
+implementer's transcript. The implementer ran seven drills of its own; these are
+independent.
+
+| # | Check | How it was broken | Went red? | Restored | Notes |
+|---|-------|-------------------|-----------|----------|-------|
+| 13 | Pinned fixture: start 10:00 → pause 10:20 → resume 10:30 → stop 10:45 = **35m across two segments** | Made `pause()` stop closing the segment (`ended_at` never written) | Yes — exit 1 | Byte-identical | The slice's headline acceptance check |
+| 14 | Rehydration — a running entry survives a fresh engine against the same DB file | Disabled `TimerEngine.create`'s restore path | Yes — exit 1 | Byte-identical | The spec's "kill-and-relaunch" analogue, against a **real** SQLite file, not a mock |
+| 15 | Day attribution is **local**, not UTC | Replaced the local `getFullYear/getMonth/getDate` key with `toISOString().slice(0,10)` | Yes — `expected '2026-08-22' not to be '2026-08-22'` | Byte-identical | Machine TZ confirmed `PDT` first — **on a UTC runner this drill proves nothing**, which is itself worth knowing |
+| 16 | Open segment counts elapsed to *now* | `segmentDurationSeconds` returns 0 for any open segment | Yes — `expected +0 to be 1200`, `expected +0 to be 450` | Byte-identical | Fired at both unit and integration level |
+| 17 | **Dependency allowlist catches a new, unlisted dependency** | Commented `@tauri-apps/plugin-sql` out of `deps-allowlist.txt` | Yes — `npm dependency "@tauri-apps/plugin-sql" is not in deps-allowlist.txt` | Byte-identical | First slice to add a dependency; this is the gate's first real exercise |
+| 18 | Capability drift caught by the CSP golden file | Removed `sql:allow-execute` from `capabilities/default.json`, keeping the JSON valid | Yes — golden-subset mismatch naming `sql:allow-execute` | Byte-identical | S1's mechanism still guards S2's own capability change |
+
+### Two drills were invalid on the first attempt — and the harness said so
+
+Worth recording, because it is the failure mode this whole file exists to catch:
+
+- The **day-attribution** sabotage was a **no-op** — the regex didn't match, the file was
+  unchanged, and the suite stayed green. Scored as *invalid*, not as a pass, by the
+  harness's `cmp`-against-backup guard. Without that guard it would have been recorded
+  as "check verified" on the strength of a green run that proved nothing.
+- The **capability** sabotage broke the JSON *syntax*, so the test failed with
+  `SyntaxError: Unexpected token ']'` — red, but for the wrong reason. A red run is not
+  automatically evidence: it has to be red *for the reason under test*. Redone with a
+  syntactically valid edit and a required-pattern assertion, and the second harness
+  checks the failure text matches the intended cause before scoring a pass.
+
+Both were redone correctly and are rows 15 and 18 above.
+
+### Dependency finding — same shape as S1's `reqwest`
+
+`sqlx-mysql` and `sqlx-postgres` appear in `Cargo.lock` via `sqlx`, but were verified
+**absent from both shipping targets** (`aarch64-apple-darwin`, `x86_64-pc-windows-msvc`)
+by `cargo tree --target … -i`. Only the SQLite backend compiles in. Allowlisted with the
+finding documented inline.
+
 ## The three rules this table exists to enforce
 
 **A fake break proves nothing.** Editing a comment, renaming an unused variable, or
@@ -95,14 +133,25 @@ in this table. Rows 2, 3, 4 and 5 are exactly that shape, and row 5 was in fact 
 
 ## Verdict
 
-*Interim — S1 only. Rows accumulate as slices land; this section is rewritten each time.*
+*Interim — S1 and S2. Rows accumulate as slices land; this section is rewritten each time.*
 
-- Checks verified: **12 of 12** in S1 scope (all re-run by the coordinator).
+- Checks verified: **18 of 18** (12 in S1, 6 in S2), every one re-run by the coordinator
+  rather than inherited from an implementer's report.
 - Found broken and repaired: **2** — F1 (both Windows zero-network gates vacuous) and
-  F2 (CRLF disabling the Windows test suite). These are the run's real findings so far.
-- Unverifiable so far, with reason: **CI green on `windows-latest`** — in flight at time
-  of writing; macOS is green with its `.dmg` artifact. The Windows Tauri build has never
-  been compiled anywhere yet. Human-rubric and live-app checks (S4/S5/S8 manual, S14,
-  S15's Drive step) are exempt per `Done #6` — they are graded by their named human.
+  F2 (CRLF disabling the Windows test suite). Both from S1; S2 introduced none.
+- Drills rejected as invalid before scoring: **2** (S2) — one no-op sabotage, one that
+  went red for the wrong reason. Both redone. Recorded because a drill harness that
+  cannot reject its own bad drills is the same failure as a check that cannot fail.
+- Unverifiable so far, with reason:
+  - **The production SQLite path.** S2's tests run against a real SQLite file through
+    Node's `node:sqlite`; the shipped app uses `tauri-plugin-sql` over Tauri IPC, which
+    no CI-safe test can reach. Both share one migration file (`0001_init.sql`) and plain
+    `?` placeholders, so the dialect surface is identical, but the production driver is
+    exercised only by compilation until a later slice wires the UI to it. Named risk,
+    not a passing check.
+  - **Day attribution on a UTC machine.** Row 15's drill is only meaningful on a
+    non-UTC host (verified `PDT` here). A UTC CI runner would pass it vacuously.
+  - Human-rubric and live-app checks (S4/S5/S8 manual, S14, S15's Drive step) are
+    exempt per `Done #6` — graded by their named human.
 
 Any check that could not be verified is an open risk, not a passing check.

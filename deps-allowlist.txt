@@ -3,7 +3,7 @@
 # Zero-network mechanism (b) (BUILD_SPEC Constraints): CI fails
 # (scripts/check-deps-allowlist.mjs) if package-lock.json or
 # src-tauri/Cargo.lock gains any dependency name not listed below. A new
-# dependency requires a human-reviewed change to this file in the same PR;
+# dependency requires a human-reviewed allowlist change in the same PR;
 # no crate/package providing network I/O is knowingly added.
 #
 # NOTE on "reqwest" in the cargo section: it is a transitive dependency of
@@ -15,6 +15,24 @@
 # records the dependency graph across every target Tauri supports, not just
 # the ones we build for; it was not chosen or added by this project. See
 # the S1 report for the verified cargo-tree evidence.
+#
+# NOTE on S2's `tauri-plugin-sql` addition (npm `@tauri-apps/plugin-sql`,
+# cargo `tauri-plugin-sql`, feature = "sqlite" only): the plugin's Cargo.toml
+# declares optional `mysql`/`postgres` sqlx backends we never enable, but
+# Cargo.lock still records their full dependency closures (same "recorded,
+# not built" pattern as reqwest above). Verified with `cargo tree -i
+# sqlx-mysql` / `cargo tree -i sqlx-postgres` against this project's actual
+# build: both print "nothing to print" — neither is in our real dependency
+# graph. Their transitive crypto/auth deps (ahash, base64ct, bitvec, borsh*,
+# bytecheck*, cfg_aliases, const-oid, der, etcetera, funty, hkdf, hmac, home,
+# lazy_static, libm, md-5, num-bigint-dig, num-integer, num-iter,
+# pem-rfc7468, pkcs1, pkcs8, plain, ppv-lite86, ptr_meta*, radium, rand*,
+# rend, rkyv*, rsa, seahash, sha1, signature, simdutf8, spki, stringprep,
+# subtle, tap, unicode-bidi, unicode-normalization, unicode-properties,
+# wasite, whoami, wyz, zerocopy*, zeroize) are listed for the same reason:
+# present in the lockfile's full resolved graph, absent from the compiled
+# binary. `sqlx-sqlite` (the backend we do use) IS in the real tree, verified
+# with `cargo tree -i sqlx-sqlite`.
 #
 # Regenerate the full member list from real lockfiles with:
 #   node -e "import('./scripts/check-deps-allowlist.mjs').then(async m => {
@@ -128,6 +146,7 @@
 @tauri-apps/cli-win32-ia32-msvc
 @tauri-apps/cli-win32-x64-msvc
 @tauri-apps/plugin-opener
+@tauri-apps/plugin-sql
 @testing-library/dom
 @testing-library/jest-dom
 @testing-library/react
@@ -245,11 +264,14 @@ yallist
 # includes the root package itself under [[package]]).
 tiny-time-tool
 adler2
+ahash
 aho-corasick
 alloc-no-stdlib
 alloc-stdlib
+allocator-api2
 android_system_properties
 anyhow
+arrayvec
 async-broadcast
 async-channel
 async-executor
@@ -262,19 +284,26 @@ async-task
 async-trait
 atk
 atk-sys
+atoi
 atomic-waker
 autocfg
 base64
+base64ct
 bit-set
 bit-vec
 bitflags
+bitvec
 block-buffer
 block2
 blocking
+borsh
+borsh-derive
 brotli
 brotli-decompressor
 bs58
 bumpalo
+bytecheck
+bytecheck_derive
 bytemuck
 byteorder
 byteorder-lite
@@ -290,17 +319,22 @@ cesu8
 cfb
 cfg-expr
 cfg-if
+cfg_aliases
 chrono
 combine
 concurrent-queue
+const-oid
 cookie
 core-foundation
 core-foundation-sys
 core-graphics
 core-graphics-types
 cpufeatures
+crc
+crc-catalog
 crc32fast
 crossbeam-channel
+crossbeam-queue
 crossbeam-utils
 crypto-common
 cssparser
@@ -314,6 +348,7 @@ dbus
 defmt
 defmt-macros
 defmt-parser
+der
 deranged
 derive_more
 derive_more-impl
@@ -325,6 +360,7 @@ displaydoc
 dlopen2
 dlopen2_derive
 dom_query
+dotenvy
 dpi
 dtoa
 dtoa-short
@@ -332,6 +368,7 @@ dtor
 dtor-proc-macro
 dunce
 dyn-clone
+either
 embed-resource
 embed_plist
 endi
@@ -340,6 +377,7 @@ enumflags2_derive
 equivalent
 erased-serde
 errno
+etcetera
 event-listener
 event-listener-strategy
 fastrand
@@ -347,15 +385,18 @@ fdeflate
 field-offset
 find-msvc-tools
 flate2
+flume
 fnv
 foldhash
 foreign-types
 foreign-types-macros
 foreign-types-shared
 form_urlencoded
+funty
 futures-channel
 futures-core
 futures-executor
+futures-intrusive
 futures-io
 futures-lite
 futures-macro
@@ -382,9 +423,13 @@ gtk
 gtk-sys
 gtk3-macros
 hashbrown
+hashlink
 heck
 hermit-abi
 hex
+hkdf
+hmac
+home
 html5ever
 http
 http-body
@@ -426,17 +471,21 @@ js-sys
 json-patch
 jsonptr
 keyboard-types
+lazy_static
 libappindicator
 libappindicator-sys
 libc
 libdbus-sys
 libloading
+libm
 libredox
+libsqlite3-sys
 linux-raw-sys
 litemap
 lock_api
 log
 markup5ever
+md-5
 memchr
 memoffset
 mime
@@ -447,7 +496,10 @@ muda
 ndk
 ndk-sys
 new_debug_unreachable
+num-bigint-dig
 num-conv
+num-integer
+num-iter
 num-traits
 num_enum
 num_enum_derive
@@ -477,6 +529,7 @@ pango-sys
 parking
 parking_lot
 parking_lot_core
+pem-rfc7468
 percent-encoding
 phf
 phf_codegen
@@ -485,7 +538,10 @@ phf_macros
 phf_shared
 pin-project-lite
 piper
+pkcs1
+pkcs8
 pkg-config
+plain
 plist
 png
 polling
@@ -493,15 +549,22 @@ portable-atomic
 portable-atomic-util
 potential_utf
 powerfmt
+ppv-lite86
 precomputed-hash
 proc-macro-crate
 proc-macro-error
 proc-macro-error-attr
 proc-macro2
+ptr_meta
+ptr_meta_derive
 pxfm
 quick-xml
 quote
 r-efi
+radium
+rand
+rand_chacha
+rand_core
 raw-window-handle
 redox_syscall
 redox_users
@@ -510,15 +573,22 @@ ref-cast-impl
 regex
 regex-automata
 regex-syntax
+rend
 reqwest
+rkyv
+rkyv_derive
+rsa
+rust_decimal
 rustc-hash
 rustc_version
 rustix
 rustversion
+ryu
 same-file
 schemars
 schemars_derive
 scopeguard
+seahash
 selectors
 semver
 serde
@@ -529,15 +599,19 @@ serde_derive_internals
 serde_json
 serde_repr
 serde_spanned
+serde_urlencoded
 serde_with
 serde_with_macros
 serialize-to-javascript
 serialize-to-javascript-impl
 servo_arc
+sha1
 sha2
 shlex
 signal-hook-registry
+signature
 simd-adler32
+simdutf8
 siphasher
 slab
 smallvec
@@ -545,10 +619,21 @@ socket2
 softbuffer
 soup3
 soup3-sys
+spin
+spki
+sqlx
+sqlx-core
+sqlx-macros
+sqlx-macros-core
+sqlx-mysql
+sqlx-postgres
+sqlx-sqlite
 stable_deref_trait
 string_cache
 string_cache_codegen
+stringprep
 strsim
+subtle
 swift-rs
 syn
 sync_wrapper
@@ -556,6 +641,7 @@ synstructure
 system-deps
 tao
 tao-macros
+tap
 target-lexicon
 tauri
 tauri-build
@@ -563,6 +649,7 @@ tauri-codegen
 tauri-macros
 tauri-plugin
 tauri-plugin-opener
+tauri-plugin-sql
 tauri-runtime
 tauri-runtime-wry
 tauri-utils
@@ -578,6 +665,7 @@ tinystr
 tinyvec
 tinyvec_macros
 tokio
+tokio-stream
 tokio-util
 toml
 toml_datetime
@@ -601,12 +689,16 @@ unic-char-range
 unic-common
 unic-ucd-ident
 unic-ucd-version
+unicode-bidi
 unicode-ident
+unicode-normalization
+unicode-properties
 unicode-segmentation
 url
 urlpattern
 utf8_iter
 uuid
+vcpkg
 version-compare
 version_check
 vswhom
@@ -615,6 +707,7 @@ walkdir
 want
 wasi
 wasip2
+wasite
 wasm-bindgen
 wasm-bindgen-futures
 wasm-bindgen-macro
@@ -628,6 +721,7 @@ webkit2gtk-sys
 webview2-com
 webview2-com-macros
 webview2-com-sys
+whoami
 winapi
 winapi-i686-pc-windows-gnu
 winapi-util
@@ -660,6 +754,7 @@ winreg
 wit-bindgen
 writeable
 wry
+wyz
 x11
 x11-dl
 yoke
@@ -668,8 +763,11 @@ zbus
 zbus_macros
 zbus_names
 zcheapstr
+zerocopy
+zerocopy-derive
 zerofrom
 zerofrom-derive
+zeroize
 zerotrie
 zerovec
 zerovec-derive

@@ -1,0 +1,22 @@
+// BUILD_SPEC ("Pinned interfaces" / decisions.md #44): an entry belongs to
+// the *local* calendar day of its first segment's start — everywhere (Log,
+// Insights, CSV `date`, Copy-for-AI). A rare overnight entry (e.g.
+// 23:30→00:45) is not split across two days.
+
+/** Local calendar-day key (`YYYY-MM-DD`) for a `Date`, in the machine's own
+ * timezone — deliberately `getFullYear`/`getMonth`/`getDate` (local), never
+ * `toISOString`'s UTC slice, which would misattribute any entry near a
+ * timezone's midnight-vs-UTC-midnight gap. */
+export function localDayKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** The day an entry is attributed to: the local calendar day of its first
+ * segment's `startedAt`. Takes the ISO8601 string directly (not a `Date`)
+ * since that's what's persisted and read back from `Segment.startedAt`. */
+export function entryDayKey(firstSegmentStartedAt: string): string {
+  return localDayKey(new Date(firstSegmentStartedAt));
+}
