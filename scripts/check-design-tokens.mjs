@@ -38,8 +38,58 @@ const PIXEL_VALUE = /\b\d+px\b/;
 /** Bare colour keywords that bypass the palette just as effectively as hex. */
 const RAW_COLOUR_WORD = /(?:^|[\s:])(?:red|blue|green|black|white|grey|gray|orange|yellow|purple)(?=[\s;,)]|$)/i;
 
+/** Properties whose values are UNITLESS but still design decisions, so a bare
+ *  number bypasses the token system just as a hex or px would. Found the hard
+ *  way: the gate's first version only looked for colours and px, and a review
+ *  immediately caught `line-height: 1` and `opacity: 0.5` sitting in plain
+ *  sight. Kept to a conservative list — z-index, flex and grid spans are
+ *  layout mechanics, not palette. */
+// Not anchored to a whole line: a declaration can sit inline inside a rule
+// (`.x { line-height: 1; }`), and an anchored version silently matched
+// nothing there — which is how the first attempt at this check passed its own
+// fixtures while finding no violations.
+const UNITLESS_TOKEN_PROPS = /(?:^|[;{\s])(line-height|opacity|font-weight|letter-spacing)\s*:\s*([0-9.]+)\s*(?=[;}]|$)/;
+
 /** Values that carry no design intent and would be noise to tokenize. */
 const INERT = new Set(["0", "0px", "transparent", "currentColor", "inherit", "none", "unset", "initial"]);
+
+/**
+ * Blanks out `/* ... *\/` comments across the whole file, preserving line
+ * breaks so reported line numbers stay accurate.
+ *
+ * A first version did `line.split("/*")[0]`, which was wrong in both
+ * directions and was caught in review — the same blind-spot class this gate
+ * exists to close, arrived at from a different angle:
+ *   - false negative: `.x { /* hairline *\/ border: 1px solid #f00; }` kept
+ *     only `.x { `, so the real declaration after the comment was never seen;
+ *   - false positive: a continuation line of a multi-line header comment was
+ *     scanned as CSS, so prose like "1px hairline" would fail CI. Every
+ *     stylesheet here opens with such a header, so that was live, not
+ *     hypothetical.
+ */
+export function stripComments(text) {
+  let out = "";
+  let inComment = false;
+  for (let i = 0; i < text.length; i++) {
+    if (!inComment && text[i] === "/" && text[i + 1] === "*") {
+      inComment = true;
+      i++;
+      continue;
+    }
+    if (inComment && text[i] === "*" && text[i + 1] === "/") {
+      inComment = false;
+      i++;
+      continue;
+    }
+    if (inComment) {
+      // Keep newlines so line numbers survive.
+      out += text[i] === "\n" ? "\n" : " ";
+      continue;
+    }
+    out += text[i];
+  }
+  return out;
+}
 
 export function findViolations(rootDir) {
   const violations = [];
@@ -65,16 +115,19 @@ export function findViolations(rootDir) {
       if (rel.split(sep).join("/") === TOKENS_FILE.split(sep).join("/")) continue;
 
       const relPosix = rel.split(sep).join("/");
-      const lines = readFileSync(full, "utf8").split("\n");
+      const lines = stripComments(readFileSync(full, "utf8")).split("\n");
       lines.forEach((rawLine, i) => {
-        // Inspect the raw line: a literal is a literal whether or not a
-        // token sits beside it, and a literal var() fallback still counts.
-        const line = rawLine.split("/*")[0] ?? "";
+        // Inspect the line with comments already removed: a literal is a
+        // literal whether or not a token sits beside it, and a literal
+        // var() fallback still counts.
+        const line = rawLine;
         if (INERT.has(line.trim())) return;
         // 0px carries no design intent, so it is not a violation on its own;
         // any other pixel value is.
         const meaningfulPx = line.match(PIXEL_VALUE) !== null && /\b(?!0px\b)\d+px\b/.test(line);
+        const unitless = line.match(UNITLESS_TOKEN_PROPS);
         const hit =
+          (unitless && `a literal ${unitless[1]} value`) ||
           (HEX_COLOUR.test(line) && "a literal colour") ||
           (meaningfulPx && "a literal pixel value") ||
           (RAW_COLOUR_WORD.test(line) && "a raw colour keyword");

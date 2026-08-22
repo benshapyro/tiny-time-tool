@@ -180,9 +180,18 @@ async function run(): Promise<Bootstrapped> {
     // `popover.refresh()` fires the popover's own onTrayStateChange, which
     // is what actually re-syncs the tray, so the tray is covered by the same
     // call rather than by a second invoke that could drift out of step.
+    // `.finally`, not `.then`: commit() does stop() then start() as separate
+    // un-transacted steps, so a failure after stop() already mutated the
+    // engine would leave every surface showing the just-stopped entry — the
+    // same stale-surface bug, reached through a rejection instead of a
+    // missing call. Review finding on S6.
     void panel
       .commit()
-      .then(() => Promise.all([dashboard.refresh(), popover.refresh()]));
+      .finally(() => Promise.all([dashboard.refresh(), popover.refresh()]))
+      .catch(() => {
+        // Refresh failures must not become unhandled rejections; the surfaces
+        // simply stay as they were until the next event.
+      });
   });
 
   // The popover window relays button clicks the same way — see

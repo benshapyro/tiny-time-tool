@@ -317,3 +317,52 @@ describe("LogController — onStateChange", () => {
     expect(onStateChange).toHaveBeenCalledWith(controller.state);
   });
 });
+
+// Review finding on S6: the viewed day was pinned at construction, so a
+// Dashboard left open across midnight kept repainting yesterday. The
+// Dashboard is the main window — staying open overnight is normal.
+describe("LogController — the clock crossing midnight while the view is alive", () => {
+  it("follows today into the new day when the user has not navigated away", async () => {
+    const driver = trackDriver(dbPath);
+    // Local components, not a UTC string: the first version of this test used
+    // UTC times that never crossed LOCAL midnight in this machine's zone, so it
+    // failed while the code was correct.
+    let now = new Date(2026, 7, 21, 23, 50);
+    const engine = await TimerEngine.create(driver, () => now);
+    const controller = new LogController({
+      engine,
+      locale: "en",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+      clock: () => now,
+    });
+    await controller.refresh();
+    const beforeMidnight = controller.state.dayKey;
+    expect(controller.state.isToday).toBe(true);
+
+    now = new Date(2026, 7, 22, 0, 10);
+    await controller.refresh();
+
+    expect(controller.state.dayKey).not.toBe(beforeMidnight);
+    expect(controller.state.isToday).toBe(true);
+  });
+
+  it("does NOT yank the user forward when they deliberately navigated to a past day", async () => {
+    const driver = trackDriver(dbPath);
+    let now = new Date(2026, 7, 21, 23, 50);
+    const engine = await TimerEngine.create(driver, () => now);
+    const controller = new LogController({
+      engine,
+      locale: "en",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+      clock: () => now,
+    });
+    await controller.goToPreviousDay();
+    const pinned = controller.state.dayKey;
+
+    now = new Date(2026, 7, 22, 0, 10);
+    await controller.refresh();
+
+    expect(controller.state.dayKey).toBe(pinned);
+    expect(controller.state.isToday).toBe(false);
+  });
+});

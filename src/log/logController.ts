@@ -81,6 +81,9 @@ export class LogController {
   readonly #clock: () => Date;
   readonly #onStateChange?: (state: LogState) => void;
   #viewedDate: Date;
+  /** True while the view should track "today" as the clock moves, rather
+   * than staying pinned to a fixed date the user navigated to. */
+  #followsToday: boolean;
   #state: LogState;
 
   constructor(options: LogControllerOptions) {
@@ -90,6 +93,7 @@ export class LogController {
     this.#clock = options.clock ?? (() => new Date());
     this.#onStateChange = options.onStateChange;
     this.#viewedDate = startOfDay(this.#clock());
+    this.#followsToday = true;
     this.#state = {
       dayKey: localDayKey(this.#viewedDate),
       isToday: true,
@@ -111,6 +115,14 @@ export class LogController {
   async refresh(): Promise<void> {
     const now = this.#clock();
     const todayKey = localDayKey(now);
+    // Review finding on S6: `#viewedDate` was pinned once at construction, so
+    // a Dashboard left open across midnight kept repainting YESTERDAY — a
+    // task started after midnight simply would not appear, and the only
+    // recovery was clicking "Today". The Dashboard is the app's main window,
+    // so staying open overnight is the normal case, not an edge case.
+    if (this.#followsToday) {
+      this.#viewedDate = startOfDay(now);
+    }
     const dayKey = localDayKey(this.#viewedDate);
     const dayEntries = await this.#engine.entriesForDay(dayKey);
 
@@ -152,6 +164,7 @@ export class LogController {
   /** Jumps back to today from any navigated-away day. */
   async goToday(): Promise<void> {
     this.#viewedDate = startOfDay(this.#clock());
+    this.#followsToday = true;
     await this.refresh();
   }
 
@@ -160,6 +173,7 @@ export class LogController {
     const previous = new Date(this.#viewedDate);
     previous.setDate(previous.getDate() - 1);
     this.#viewedDate = previous;
+    this.#followsToday = false;
     await this.refresh();
   }
 
@@ -176,6 +190,9 @@ export class LogController {
     candidate.setDate(candidate.getDate() + 1);
     if (localDayKey(candidate) > todayKey) return;
     this.#viewedDate = candidate;
+    // Stepping forward ONTO today re-arms the follow behaviour; landing on
+    // any earlier day keeps the view pinned where the user put it.
+    this.#followsToday = localDayKey(candidate) === todayKey;
     await this.refresh();
   }
 
