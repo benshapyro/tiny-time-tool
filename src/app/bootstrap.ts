@@ -52,6 +52,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { AwayGapController } from "../away/awayGapController";
+import { ExportController } from "../export/exportController";
+import { EXPORT_ACTION_EVENT, EXPORT_STATE_EVENT } from "../export/exportEvents";
+import type { ExportActionPayload } from "../export/exportEvents";
 import type { Locale } from "../i18n";
 import { LOG_ACTION_EVENT, LOG_EDIT_ACTION_EVENT, LOG_STATE_EVENT } from "../log/logEvents";
 import type { LogActionPayload, LogEditActionPayload } from "../log/logEvents";
@@ -87,6 +90,7 @@ export interface Bootstrapped {
   panel: QuickEntryController;
   popover: PopoverController;
   dashboard: LogController;
+  exports: ExportController;
   reminders: ReminderController;
   awayGap: AwayGapController;
 }
@@ -141,6 +145,19 @@ async function run(): Promise<Bootstrapped> {
       void emit(LOG_STATE_EVENT, state);
     },
     onEngineMutated: () => popover.refresh(),
+  });
+
+  // S10: exports. Unlike `dashboard`/`popover` above, this controller keeps
+  // no day-scoped cached view of engine data between actions — every action
+  // (`copyTodayForAi`/`exportCsv`/`exportJson`) re-queries the engine fresh
+  // when invoked — so it needs no `onEngineMutated` seam into the
+  // cross-module refresh graph above: there is nothing in it that could go
+  // stale.
+  const exports = new ExportController({
+    engine,
+    onStateChange: (state) => {
+      void emit(EXPORT_STATE_EVENT, state);
+    },
   });
 
   // S9: away-gap recovery. Persists a heartbeat to the same `settings`
@@ -341,6 +358,37 @@ async function run(): Promise<Bootstrapped> {
     }
   });
 
+  // S10: the Dashboard's Export section relays clicks the same way — see
+  // exportEvents.ts. Each action re-pushes state via the controller's own
+  // onStateChange (already wired above); `copyForAi`/`exportCsv`/
+  // `exportJson` never throw (their own error paths set a designed state
+  // field instead — see `exportController.ts`), so there is nothing here to
+  // catch.
+  await listen<ExportActionPayload>(EXPORT_ACTION_EVENT, (event) => {
+    const { action } = event.payload;
+    switch (action.type) {
+      case "copyForAi":
+        void exports.copyTodayForAi();
+        return;
+      case "setRangeStart":
+        exports.setRangeStart(action.value);
+        return;
+      case "setRangeEnd":
+        exports.setRangeEnd(action.value);
+        return;
+      case "exportCsv":
+        void exports.exportCsv();
+        return;
+      case "exportJson":
+        void exports.exportJson();
+        return;
+      default: {
+        const exhaustive: never = action;
+        return exhaustive;
+      }
+    }
+  });
+
   // Rust's tray icon click handler (tray.rs) only emits — deciding what a
   // click means (open vs. close, refreshing first) is business logic and
   // stays here, per this project's "Rust stays thin" rule.
@@ -386,6 +434,12 @@ async function run(): Promise<Bootstrapped> {
 
   await popover.refresh();
   await dashboard.refresh();
+  // S10: pushes the Export section's initial state (today's date range) to
+  // the "main" window the same way `dashboard.refresh()` above does for the
+  // Log tab — `exports`'s constructor already computed it; this just emits
+  // it, since ExportController has no async `refresh()` of its own (see the
+  // "no cached view" comment on its construction above).
+  void emit(EXPORT_STATE_EVENT, exports.state);
 
   // BUILD_SPEC S5: "On first launch the popover auto-opens once" —
   // persisted so a real restart never re-fires it (firstLaunchFlag.ts).
@@ -393,7 +447,7 @@ async function run(): Promise<Bootstrapped> {
     void showPopover();
   }
 
-  return { shortcuts, panel, popover, dashboard, reminders, awayGap };
+  return { shortcuts, panel, popover, dashboard, exports, reminders, awayGap };
 }
 
 /** The Switch action (popover/reminder, wired by later slices): opens the

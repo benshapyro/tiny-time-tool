@@ -9,6 +9,22 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // S10: the golden export fixtures are written with a FIXED local UTC
+    // offset (`-07:00`, `America/Los_Angeles` in August/PDT) — see
+    // `fixtures/golden/export.csv`'s `first_start`/`last_end` columns and
+    // `src/export/isoOffset.ts`. Without pinning the test process's
+    // timezone, `Date#getTimezoneOffset()` reflects whatever machine is
+    // running the suite: `-07:00` locally, `+00:00` on a UTC CI runner —
+    // silently making the golden comparisons machine-dependent. Vitest
+    // applies `test.env` to each worker process before any test file
+    // (and therefore any `Date`/`Intl` call) runs, so this is set before
+    // Node's timezone cache is ever populated. Also set redundantly at the
+    // top of `vitest.setup.ts` — belt and suspenders, see that file's
+    // comment — and asserted as actually-in-effect by
+    // `src/export/timezonePin.test.ts`.
+    env: {
+      TZ: "America/Los_Angeles",
+    },
     setupFiles: ["./vitest.setup.ts"],
     // scripts/ holds the standalone Node check scripts (deps allowlist,
     // zero-network scan) and their own fixture-based tests; src-tauri is

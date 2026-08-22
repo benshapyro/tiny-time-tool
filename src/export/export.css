@@ -1,0 +1,89 @@
+/* S10 Dashboard Export section styling — tokens only (BUILD_SPEC advisory
+   rule + Design principle 4: "Tokens or it doesn't ship"). No literal
+   colors, spacing, or type values anywhere below. Design principle 3
+   ("calm surfaces"): a thin two-row strip under the Log — a copy action, a
+   range-export action — not a whole new page of chrome. */
+
+.export {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  padding: var(--space-5);
+  padding-top: var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  border-top: var(--border-width-hairline) solid var(--color-border);
+  min-width: var(--size-dashboard-min-width);
+  max-width: 100%;
+}
+
+.export__copyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.export__copyButton,
+.export__rangeButton {
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-tight);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition:
+    background var(--motion-duration-fast) var(--motion-easing-standard),
+    border-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.export__copyButton:hover,
+.export__rangeButton:hover {
+  border-color: var(--color-accent);
+}
+
+.export__copyStatus {
+  font-size: var(--font-size-sm);
+}
+
+.export__copyStatus--success {
+  color: var(--color-state-running);
+}
+
+.export__copyStatus--error {
+  color: var(--color-danger);
+}
+
+.export__rangeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.export__rangeLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.export__rangeInput {
+  border: var(--border-width-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+.export__rangeError {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+  margin: 0;
+}

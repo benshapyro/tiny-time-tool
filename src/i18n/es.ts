@@ -68,4 +68,13 @@ export const es: Record<TranslationKey, string> = {
   "away.prompt.message": "Ausente {elapsed} — ¿lo recuperamos?",
   "away.prompt.keep": "Recuperar",
   "away.prompt.discard": "Descartar",
+  "export.sectionLabel": "Exportar",
+  "export.copyForAi.button": "Copiar hoy para la IA",
+  "export.copyForAi.copied": "Copiado al portapapeles",
+  "export.copyForAi.error": "No se pudo copiar — inténtalo de nuevo",
+  "export.range.startLabel": "Desde",
+  "export.range.endLabel": "Hasta",
+  "export.range.csvButton": "Exportar CSV",
+  "export.range.jsonButton": "Exportar JSON",
+  "export.range.error.invalidOrder": "La fecha de inicio debe ser anterior o igual a la fecha de fin.",
 };
