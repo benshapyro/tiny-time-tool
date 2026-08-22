@@ -6,10 +6,10 @@ What the run needs from a human **before** it starts, derived line-by-line from 
 
 | Done line | What it needs | Status | Owner | Due | How to get it | Proof it works |
 |---|---|---|---|---|---|---|
-| `cargo test` green; local Tauri build | Rust toolchain | **need** | Ben | before launch | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` then restart shell | `cargo --version` prints a version |
+| `cargo test` green; local Tauri build | Rust toolchain | have *(verified 2026-08-22: rustup-managed cargo 1.88.0; added to fish PATH via `fish_add_path`)* | — | — | — | `cargo --version` → 1.88.0 in a login shell |
 | `npm test` green | Node + npm | have *(verified this session)* | — | — | — | node v26.7.0, npm 11.19.0 |
 | local `.dmg` build (S1, S15) | Xcode CLT | have *(verified this session)* | — | — | — | xcode-select → Xcode 17 clang |
-| CI green on both platforms | GitHub repo + authed `gh` | **need** | Ben | before launch | `gh auth refresh -h github.com` (type `! gh auth refresh -h github.com` in this session), then the run creates the private repo | `gh auth status` shows a valid token |
+| CI green on both platforms | GitHub repo + authed `gh` | have *(verified 2026-08-22: `gh api user` → benshapyro, exit 0)* | — | — | — | Note: gh's token lives in the macOS keychain, which the sandbox can't read — sandboxed `gh` calls report "invalid token" falsely; the run's gh calls need the unsandboxed approval (one prompt, at repo creation) |
 | CI produces installers | GitHub Actions enabled on the new private repo | have (default on new repos) | — | — | — | first CI run visible after initial push |
 | S15: installers in shared Drive folder | a Drive folder + stable share link | **need** | Ben | before S15 (~end of run) | create folder in Cadre Drive, copy link | link opens for a teammate who isn't Ben |
 | Landing L4: Windows smoke test | Ben's Windows device available | have (Ben confirmed owning one) | Ben | at landing | — | performed at landing |
