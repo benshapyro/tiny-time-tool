@@ -257,10 +257,17 @@ async function run(): Promise<Bootstrapped> {
         void popover.switchTask().then(() => hidePopover());
         return;
       case "awayKeep":
-        void popover.awayKeep();
+        void popover.awayKeep().catch(() => {
+          // A rejected Keep must not become an unhandled rejection, and must
+          // not leave the banner stranded — the controller drops a stale
+          // prompt itself, so a refresh is enough to resync the surface.
+          void popover.refresh();
+        });
         return;
       case "awayDiscard":
-        void popover.awayDiscard();
+        void Promise.resolve(popover.awayDiscard()).catch(() => {
+          void popover.refresh();
+        });
         return;
       default: {
         const exhaustive: never = event.payload.action;

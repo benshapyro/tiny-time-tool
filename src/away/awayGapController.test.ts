@@ -381,3 +381,51 @@ describe("AwayGapController.check — onStateChange / onEngineMutated on trigger
     expect(onEngineMutated).not.toHaveBeenCalled();
   });
 });
+
+/** Builds a controller sitting on a real pending prompt: a started entry, a
+ *  heartbeat, then a gap past the threshold so `check()` trims and prompts. */
+async function harnessWithPendingPrompt() {
+  const driver = trackDriver(dbPath);
+  const clock = fixedClock("2026-08-21T09:00:00.000Z");
+  const engine = await TimerEngine.create(driver, clock.now);
+  await engine.start({ name: "Deep work" });
+  await setLastHeartbeat(driver, "2026-08-21T09:00:00.000Z");
+  clock.advanceTo("2026-08-21T18:12:00.000Z"); // 9h12m
+  const controller = new AwayGapController({ engine, driver, clock: clock.now });
+  await controller.check();
+  return { driver, clock, engine, controller };
+}
+
+// Review finding on S9: the prompt was cleared only by keep()/discard(), but
+// the engine can also leave "paused" via the global shortcut — resume() or
+// stop() — neither of which goes through the popover. The banner then sat over
+// a running timer, and Keep threw IllegalTransitionError as an unhandled
+// rejection, stranding it permanently.
+describe("AwayGapController — a prompt the engine has moved past", () => {
+  it("clears the prompt when the user resumed via the shortcut instead of the banner", async () => {
+    const h = await harnessWithPendingPrompt();
+    expect(h.controller.prompt).not.toBeNull();
+
+    await h.engine.resume(); // the shortcut path, not the banner
+    await h.controller.check();
+
+    expect(h.controller.prompt).toBeNull();
+  });
+
+  it("Keep does not throw when the engine already moved on — it clears instead", async () => {
+    const h = await harnessWithPendingPrompt();
+    await h.engine.resume();
+
+    // Before the fix this rejected with IllegalTransitionError, unhandled.
+    await expect(h.controller.keep()).resolves.toBeUndefined();
+    expect(h.controller.prompt).toBeNull();
+  });
+
+  it("Discard is likewise safe once the engine has moved on", async () => {
+    const h = await harnessWithPendingPrompt();
+    await h.engine.stop();
+
+    expect(() => h.controller.discard()).not.toThrow();
+    expect(h.controller.prompt).toBeNull();
+  });
+});

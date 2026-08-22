@@ -149,6 +149,12 @@ export class AwayGapController {
     const entryId = this.#engine.currentEntryId;
     if (!entryId) return; // defensive: "running" always implies a current entry
 
+    // The engine is running, so any prompt we still hold is stale — the user
+    // resumed or restarted via the shortcut rather than through the banner.
+    if (this.#dropStalePrompt()) {
+      await this.#onEngineMutated?.();
+    }
+
     const segments = await this.#engine.segmentsFor(entryId);
     const openSegment = segments[segments.length - 1];
     if (!openSegment || openSegment.endedAt !== null) return; // catches paused/idle too — see the comment above
@@ -173,9 +179,43 @@ export class AwayGapController {
     await setLastHeartbeat(this.#driver, now.toISOString());
   }
 
+  /**
+   * A pending prompt is only meaningful while the engine is still paused on
+   * the entry the prompt was raised for.
+   *
+   * Review finding on S9: the prompt was cleared ONLY by keep()/discard(),
+   * but the engine can also leave "paused" through the global shortcut —
+   * resume() (paused → running) or stop() (paused → idle) — neither of which
+   * goes through the popover. The banner then stayed on screen over a running
+   * timer, and pressing Keep threw IllegalTransitionError from
+   * reopenLastSegment as an unhandled rejection, leaving the banner stuck and
+   * the trimmed span unrecoverable through the UI.
+   *
+   * Checking the engine's actual state, rather than trusting that every exit
+   * route remembers to notify us, is the difference between a prompt that
+   * cannot strand and one that merely usually does not.
+   */
+  #promptIsStale(): boolean {
+    if (!this.#prompt) return false;
+    return this.#engine.state !== "paused" || this.#engine.currentEntryId !== this.#prompt.entryId;
+  }
+
+  /** Drops a prompt the engine has already moved past. Returns true if it
+   * cleared one, so callers can decide whether to re-notify. */
+  #dropStalePrompt(): boolean {
+    if (!this.#promptIsStale()) return false;
+    this.#clearPrompt();
+    return true;
+  }
+
   /** "Keep" — see the module doc comment's Keep/discard semantics section.
-   * Safe no-op when there is no pending prompt. */
+   * Safe no-op when there is no pending prompt, or when the engine has
+   * already moved past the one we hold. */
   async keep(): Promise<void> {
+    if (this.#dropStalePrompt()) {
+      await this.#onEngineMutated?.();
+      return;
+    }
     if (!this.#prompt) return;
     const { entryId } = this.#prompt;
     await this.#engine.reopenLastSegment(entryId);
@@ -192,6 +232,7 @@ export class AwayGapController {
   /** "Discard" — see the module doc comment. No further engine mutation:
    * the trim already happened at trigger time in `check()`. */
   discard(): void {
+    if (this.#dropStalePrompt()) return;
     if (!this.#prompt) return;
     this.#clearPrompt();
   }
