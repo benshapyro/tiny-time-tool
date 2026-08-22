@@ -212,6 +212,50 @@ export class TimerEngine {
     this.#openSegmentId = null;
   }
 
+  /** S9: away-gap recovery — closes the open segment at an EXPLICIT
+   * timestamp rather than the injected clock, otherwise identical to
+   * `pause()`. `AwayGapController` uses this to trim the segment back to
+   * the last confirmed-alive heartbeat, never to "now": the user must not
+   * be billed for time they were away (BUILD_SPEC S9: "trims the entry
+   * retroactively at the last heartbeat"). Legal only from "running", same
+   * as `pause()` — throws `IllegalTransitionError` otherwise. */
+  async pauseAt(timestamp: string): Promise<void> {
+    if (this.#state !== "running") {
+      throw new IllegalTransitionError("pauseAt", this.#state);
+    }
+    await this.#driver.execute("UPDATE segments SET ended_at = ? WHERE id = ?", [timestamp, this.#openSegmentId]);
+    this.#state = "paused";
+    this.#openSegmentId = null;
+  }
+
+  /** S9: undoes a `pauseAt` trim — the away-gap prompt's "Keep" action
+   * ("add it back?"). Reopens `entryId`'s most recently closed segment
+   * (clears its `ended_at`) and returns to "running", rather than starting
+   * a NEW segment the way `resume()` does: the whole point of "Keep" is
+   * that the trimmed span itself is restored, so the away time counts as
+   * tracked work, exactly as if the auto-pause had never happened. Legal
+   * only while paused with `entryId` as the current entry — the exact
+   * state `pauseAt` leaves behind, and nothing else can have intervened,
+   * since `start()` itself is only legal from idle. Throws
+   * `IllegalTransitionError` otherwise. */
+  async reopenLastSegment(entryId: string): Promise<void> {
+    if (this.#state !== "paused" || this.#currentEntryId !== entryId) {
+      throw new IllegalTransitionError("reopenLastSegment", this.#state);
+    }
+    const segments = await this.segmentsFor(entryId);
+    const last = segments[segments.length - 1];
+    if (!last || last.endedAt === null) {
+      // Defensive: should be unreachable given the state guard above (a
+      // "paused" entry always has a most-recently-closed segment), but
+      // never silently no-op an inconsistency this method itself would
+      // otherwise mask.
+      throw new Error(`No closed segment to reopen for entry ${entryId}`);
+    }
+    await this.#driver.execute("UPDATE segments SET ended_at = NULL WHERE id = ?", [last.id]);
+    this.#state = "running";
+    this.#openSegmentId = last.id;
+  }
+
   async resume(): Promise<void> {
     if (this.#state !== "paused") {
       throw new IllegalTransitionError("resume", this.#state);

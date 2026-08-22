@@ -20,6 +20,7 @@
 // Duplicating that logic here would be exactly the kind of drift BUILD_SPEC
 // warns against ("Wire Switch to the existing switchAction() seam").
 
+import type { AwayGapController } from "../away/awayGapController";
 import type { Locale } from "../i18n";
 import { interpolate, t } from "../i18n";
 import { localDayKey } from "../timer/dayAttribution";
@@ -31,6 +32,15 @@ import { currentAcceleratorPlatform, formatAccelerator } from "../shortcuts/form
 import type { TrayState } from "../tray/trayState";
 
 export type EntryStatus = "running" | "paused" | "stopped";
+
+/** S9: the away-gap recovery prompt, as the popover renders it — a fully
+ * localized message string (built here via `t()`/`interpolate()`, never in
+ * the presentational component, matching every other pre-localized field
+ * on this state), plus the entry id `awayKeep`/`awayDiscard` act on. */
+export interface AwayPromptView {
+  entryId: string;
+  message: string;
+}
 
 export interface PopoverEntryView {
   id: string;
@@ -51,6 +61,10 @@ export interface PopoverState {
    * teach line naming the primary shortcut (BUILD_SPEC: "Press {primary
    * shortcut} to start tracking"). `null` whenever any entry exists. */
   teachLine: string | null;
+  /** S9: set whenever the wired `AwayGapController` has a pending "Away Xh
+   * Ym — add it back?" prompt; `null` otherwise (including when no
+   * `AwayGapController` is wired at all — see `PopoverControllerOptions`). */
+  awayPrompt: AwayPromptView | null;
 }
 
 const EMPTY_STATE: PopoverState = {
@@ -59,6 +73,7 @@ const EMPTY_STATE: PopoverState = {
   timerStatus: "idle",
   elapsedSeconds: 0,
   teachLine: null,
+  awayPrompt: null,
 };
 
 export interface PopoverControllerOptions {
@@ -80,6 +95,11 @@ export interface PopoverControllerOptions {
    * `refresh()` rather than from each action means every path that can
    * change state — including future ones — syncs the tray by construction. */
   onTrayStateChange?: (state: TrayState, elapsedSeconds: number) => void;
+  /** S9: optional — when wired, the popover surfaces its `.prompt` as
+   * `PopoverState.awayPrompt` and `awayKeep()`/`awayDiscard()` delegate to
+   * it. Left undefined in tests/callers that don't exercise away-gap
+   * recovery, same optionality convention as `onSwitch`. */
+  awayGap?: AwayGapController;
 }
 
 export class PopoverController {
@@ -90,6 +110,7 @@ export class PopoverController {
   readonly #onSwitch?: () => void | Promise<void>;
   readonly #onStateChange?: (state: PopoverState) => void;
   readonly #onTrayStateChange?: (state: TrayState, elapsedSeconds: number) => void;
+  readonly #awayGap?: AwayGapController;
   #state: PopoverState;
 
   constructor(options: PopoverControllerOptions) {
@@ -100,6 +121,7 @@ export class PopoverController {
     this.#onSwitch = options.onSwitch;
     this.#onStateChange = options.onStateChange;
     this.#onTrayStateChange = options.onTrayStateChange;
+    this.#awayGap = options.awayGap;
     this.#state = EMPTY_STATE;
   }
 
@@ -137,12 +159,23 @@ export class PopoverController {
         ? interpolate(t(this.#locale, "popover.teachLine"), { shortcut: formatAccelerator(this.#primaryAccelerator, currentAcceleratorPlatform(), this.#locale) })
         : null;
 
+    const pending = this.#awayGap?.prompt ?? null;
+    const awayPrompt: AwayPromptView | null = pending
+      ? {
+          entryId: pending.entryId,
+          message: interpolate(t(this.#locale, "away.prompt.message"), {
+            elapsed: formatDurationHM(pending.awaySeconds),
+          }),
+        }
+      : null;
+
     this.#setState({
       entries,
       totalLabel: formatDurationHM(totalSeconds),
       timerStatus,
       elapsedSeconds,
       teachLine,
+      awayPrompt,
     });
 
     // Keep the tray in step with whatever just happened, whichever surface
@@ -176,6 +209,23 @@ export class PopoverController {
    * popover doesn't own that state change, the panel's later commit does. */
   async switchTask(): Promise<void> {
     await this.#onSwitch?.();
+  }
+
+  /** S9: "Keep" — delegates the mutation to the wired `AwayGapController`
+   * (see its own doc comment for the Keep/discard semantics), then
+   * refreshes so the popover's own state (entries, elapsed, `awayPrompt`)
+   * reflects the result immediately. A safe no-op when no away controller
+   * is wired, or it has no pending prompt. */
+  async awayKeep(): Promise<void> {
+    await this.#awayGap?.keep();
+    await this.refresh();
+  }
+
+  /** S9: "Discard" — see `awayKeep()`'s doc comment; same shape, the other
+   * decision. */
+  async awayDiscard(): Promise<void> {
+    this.#awayGap?.discard();
+    await this.refresh();
   }
 
   #setState(patch: Partial<PopoverState>): void {

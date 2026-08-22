@@ -10,6 +10,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AwayGapController } from "../away/awayGapController";
+import { setLastHeartbeat } from "../away/heartbeatStore";
 import { DEFAULT_ACCELERATORS } from "../shortcuts/shortcutController";
 import { closeTrackedDrivers, trackDriver } from "../timer/testSqliteSupport";
 import { TimerEngine } from "../timer/timerEngine";
@@ -295,6 +297,142 @@ describe("PopoverController — actions", () => {
 // icon on Idle and pressing Stop left it ticking on a stopped timer. The
 // shortcut path had this wired; the popover path never did. No existing test
 // caught it because the controller was only ever exercised in isolation.
+// S9: away-gap recovery surfaces in the popover (BUILD_SPEC S9's cross-
+// surface obligation — an away-gap trim mutates a persisted entry and
+// changes timer state, exactly like S7's edits/deletes, so the popover
+// must learn about it the same way). `AwayGapController` is optional on
+// `PopoverControllerOptions`; when absent, `awayPrompt` is always null —
+// existing callers/tests above never construct one and must keep passing.
+describe("PopoverController — away-gap prompt", () => {
+  it("awayPrompt is null when no AwayGapController is wired at all", async () => {
+    const driver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(driver, () => new Date("2026-08-21T09:00:00.000Z"));
+    const controller = new PopoverController({
+      engine,
+      locale: "en",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+    });
+
+    await controller.refresh();
+
+    expect(controller.state.awayPrompt).toBeNull();
+  });
+
+  it("surfaces a localized 'Away Xh Ym — add it back?' message once the away controller has a pending prompt", async () => {
+    const driver = trackDriver(dbPath);
+    const clock = fixedClock("2026-08-21T09:00:00.000Z");
+    const engine = await TimerEngine.create(driver, clock.now);
+    const entry = await engine.start({ name: "Deep work" });
+    await setLastHeartbeat(driver, "2026-08-21T09:00:00.000Z");
+    clock.advanceTo("2026-08-21T18:12:00.000Z"); // 9h12m gap
+    const awayGap = new AwayGapController({ engine, driver, clock: clock.now });
+    await awayGap.check();
+
+    const controller = new PopoverController({
+      engine,
+      locale: "en",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+      clock: clock.now,
+      awayGap,
+    });
+    await controller.refresh();
+
+    expect(controller.state.awayPrompt).not.toBeNull();
+    expect(controller.state.awayPrompt?.entryId).toBe(entry.id);
+    expect(controller.state.awayPrompt?.message).toBe("Away 9h 12m — add it back?");
+  });
+
+  it("es locale renders the idiomatic message, never a raw token", async () => {
+    const driver = trackDriver(dbPath);
+    const clock = fixedClock("2026-08-21T09:00:00.000Z");
+    await (await TimerEngine.create(driver, clock.now)).start({ name: "Deep work" });
+    await setLastHeartbeat(driver, "2026-08-21T09:00:00.000Z");
+    clock.advanceTo("2026-08-21T18:12:00.000Z");
+    const engine = await TimerEngine.create(driver, clock.now);
+    const awayGap = new AwayGapController({ engine, driver, clock: clock.now });
+    await awayGap.check();
+
+    const controller = new PopoverController({
+      engine,
+      locale: "es",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+      clock: clock.now,
+      awayGap,
+    });
+    await controller.refresh();
+
+    expect(controller.state.awayPrompt?.message).toBe("Ausente 9h 12m — ¿lo recuperamos?");
+  });
+
+  it("awayKeep() delegates to the away controller, then refreshes — the entry returns to running", async () => {
+    const driver = trackDriver(dbPath);
+    const clock = fixedClock("2026-08-21T09:00:00.000Z");
+    const engine = await TimerEngine.create(driver, clock.now);
+    await engine.start({ name: "Deep work" });
+    await setLastHeartbeat(driver, "2026-08-21T09:00:00.000Z");
+    clock.advanceTo("2026-08-21T18:12:00.000Z");
+    const awayGap = new AwayGapController({ engine, driver, clock: clock.now });
+    await awayGap.check();
+    const controller = new PopoverController({
+      engine,
+      locale: "en",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+      clock: clock.now,
+      awayGap,
+    });
+    await controller.refresh();
+    expect(controller.state.timerStatus).toBe("paused");
+
+    await controller.awayKeep();
+
+    expect(engine.state).toBe("running");
+    expect(controller.state.timerStatus).toBe("running");
+    expect(controller.state.awayPrompt).toBeNull();
+  });
+
+  it("awayDiscard() delegates to the away controller, then refreshes — the entry stays paused and trimmed", async () => {
+    const driver = trackDriver(dbPath);
+    const clock = fixedClock("2026-08-21T09:00:00.000Z");
+    const engine = await TimerEngine.create(driver, clock.now);
+    await engine.start({ name: "Deep work" });
+    await setLastHeartbeat(driver, "2026-08-21T09:00:00.000Z");
+    clock.advanceTo("2026-08-21T18:12:00.000Z");
+    const awayGap = new AwayGapController({ engine, driver, clock: clock.now });
+    await awayGap.check();
+    const controller = new PopoverController({
+      engine,
+      locale: "en",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+      clock: clock.now,
+      awayGap,
+    });
+    await controller.refresh();
+
+    await controller.awayDiscard();
+
+    expect(engine.state).toBe("paused");
+    expect(controller.state.timerStatus).toBe("paused");
+    expect(controller.state.awayPrompt).toBeNull();
+  });
+
+  it("calling awayKeep()/awayDiscard() with no pending prompt is a safe no-op", async () => {
+    const driver = trackDriver(dbPath);
+    const engine = await TimerEngine.create(driver, () => new Date("2026-08-21T09:00:00.000Z"));
+    const awayGap = new AwayGapController({ engine, driver });
+    const controller = new PopoverController({
+      engine,
+      locale: "en",
+      primaryAccelerator: DEFAULT_ACCELERATORS.primary,
+      awayGap,
+    });
+    await controller.refresh();
+
+    await expect(controller.awayKeep()).resolves.not.toThrow();
+    await expect(controller.awayDiscard()).resolves.not.toThrow();
+    expect(controller.state.awayPrompt).toBeNull();
+  });
+});
+
 describe("PopoverController — tray stays in sync with popover actions", () => {
   it("reports a tray state for every action, not just for shortcut-driven ones", async () => {
     const driver = trackDriver(dbPath);

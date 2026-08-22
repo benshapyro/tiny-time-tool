@@ -15,7 +15,7 @@
 export const POPOVER_STATE_EVENT = "popover:state";
 export const POPOVER_ACTION_EVENT = "popover:action";
 
-export type PopoverActionKind = "start" | "pause" | "resume" | "switch" | "stop";
+export type PopoverActionKind = "start" | "pause" | "resume" | "switch" | "stop" | "awayKeep" | "awayDiscard";
 
 export interface PopoverActionPayload {
   action: PopoverActionKind;

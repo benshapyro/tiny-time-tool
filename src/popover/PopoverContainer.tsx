@@ -33,6 +33,7 @@ const IDLE_STATE: PopoverState = {
   timerStatus: "idle",
   elapsedSeconds: 0,
   teachLine: null,
+  awayPrompt: null,
 };
 
 function PopoverContainer() {
@@ -78,6 +79,8 @@ function PopoverContainer() {
       onResume={() => dispatch("resume")}
       onSwitch={() => dispatch("switch")}
       onStop={() => dispatch("stop")}
+      onAwayKeep={() => dispatch("awayKeep")}
+      onAwayDiscard={() => dispatch("awayDiscard")}
     />
   );
 }

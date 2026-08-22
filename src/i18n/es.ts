@@ -65,4 +65,7 @@ export const es: Record<TranslationKey, string> = {
   "log.undo.dismiss": "Descartar",
   "reminder.notification.title": "Sigues en curso",
   "reminder.notification.body": "{name} — {elapsed} hasta ahora",
+  "away.prompt.message": "Ausente {elapsed} — ¿lo recuperamos?",
+  "away.prompt.keep": "Recuperar",
+  "away.prompt.discard": "Descartar",
 };

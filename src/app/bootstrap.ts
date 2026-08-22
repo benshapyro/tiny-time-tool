@@ -51,6 +51,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { AwayGapController } from "../away/awayGapController";
 import type { Locale } from "../i18n";
 import { LOG_ACTION_EVENT, LOG_EDIT_ACTION_EVENT, LOG_STATE_EVENT } from "../log/logEvents";
 import type { LogActionPayload, LogEditActionPayload } from "../log/logEvents";
@@ -87,6 +88,7 @@ export interface Bootstrapped {
   popover: PopoverController;
   dashboard: LogController;
   reminders: ReminderController;
+  awayGap: AwayGapController;
 }
 
 let bootstrapped: Promise<Bootstrapped> | null = null;
@@ -141,11 +143,35 @@ async function run(): Promise<Bootstrapped> {
     onEngineMutated: () => popover.refresh(),
   });
 
-  const popover = new PopoverController({
+  // S9: away-gap recovery. Persists a heartbeat to the same `settings`
+  // table every 30s while running (the interval below, shared with S8's
+  // reminder tick) and checks the gap once more at launch (further down).
+  // `onEngineMutated` is the ONE channel through which a trim/keep reaches
+  // every other surface when it fires from the periodic tick rather than
+  // from a popover click — `popover.refresh()` already cascades to the
+  // tray (via its own onTrayStateChange, wired below) and to the Log tab
+  // (via the tray-sync callback's `dashboard.refresh()` call), same
+  // one-call-covers-everything pattern `dashboard`'s own onEngineMutated
+  // uses above.
+  // Explicit type annotations on `awayGap`/`popover` below are load-bearing,
+  // not stylistic: each one's initializer references the OTHER by value
+  // (`awayGap`'s `onEngineMutated` calls `popover.refresh()`; `popover`'s
+  // options include `awayGap` itself), which is a genuine mutual reference
+  // TS cannot infer through (unlike `dashboard`'s one-directional reference
+  // to `popover` above, which infers fine) — without annotations, both
+  // resolve to an implicit "any that depends on itself" compile error.
+  const awayGap: AwayGapController = new AwayGapController({
+    engine,
+    driver: sqlDriver,
+    onEngineMutated: () => popover.refresh(),
+  });
+
+  const popover: PopoverController = new PopoverController({
     engine,
     locale: LOCALE,
     primaryAccelerator: DEFAULT_ACCELERATORS.primary,
     onSwitch: () => switchAction(),
+    awayGap,
     onStateChange: (state) => {
       void emit(POPOVER_STATE_EVENT, state);
     },
@@ -229,6 +255,19 @@ async function run(): Promise<Bootstrapped> {
         return;
       case "switch":
         void popover.switchTask().then(() => hidePopover());
+        return;
+      case "awayKeep":
+        void popover.awayKeep().catch(() => {
+          // A rejected Keep must not become an unhandled rejection, and must
+          // not leave the banner stranded — the controller drops a stale
+          // prompt itself, so a refresh is enough to resync the surface.
+          void popover.refresh();
+        });
+        return;
+      case "awayDiscard":
+        void Promise.resolve(popover.awayDiscard()).catch(() => {
+          void popover.refresh();
+        });
         return;
       default: {
         const exhaustive: never = event.payload.action;
@@ -330,9 +369,20 @@ async function run(): Promise<Bootstrapped> {
   // nudges within 30s of its true boundary, cheap enough to run forever in
   // a tray app. See `reminderController.ts`'s module doc comment for why
   // firing this many times near a boundary still yields exactly one nudge.
+  // S9's `awayGap.check()` shares this exact tick (BUILD_SPEC: "the gap
+  // check runs on every heartbeat tick") — one 30s ticker driving both,
+  // not two independent timers that could drift.
   setInterval(() => {
     void reminders.tick();
+    void awayGap.check();
   }, 30_000);
+
+  // BUILD_SPEC S9: "the gap check runs ... once at app launch" — the exact
+  // same `check()` the 30s ticker above calls, run once here so a kill -9
+  // while running is caught the moment the app comes back, not up to 30s
+  // later. Must run before the refreshes below so their FIRST paint
+  // already reflects any trim/prompt, not a stale pre-check view.
+  await awayGap.check();
 
   await popover.refresh();
   await dashboard.refresh();
@@ -343,7 +393,7 @@ async function run(): Promise<Bootstrapped> {
     void showPopover();
   }
 
-  return { shortcuts, panel, popover, dashboard, reminders };
+  return { shortcuts, panel, popover, dashboard, reminders, awayGap };
 }
 
 /** The Switch action (popover/reminder, wired by later slices): opens the

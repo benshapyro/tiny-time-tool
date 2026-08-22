@@ -35,9 +35,13 @@ export interface PopoverProps {
   onResume: () => void;
   onSwitch: () => void;
   onStop: () => void;
+  /** S9: away-gap recovery — "Keep" (add the away time back). */
+  onAwayKeep: () => void;
+  /** S9: away-gap recovery — "Discard" (leave it trimmed). */
+  onAwayDiscard: () => void;
 }
 
-function Popover({ locale, state, onStart, onPause, onResume, onSwitch, onStop }: PopoverProps) {
+function Popover({ locale, state, onStart, onPause, onResume, onSwitch, onStop, onAwayKeep, onAwayDiscard }: PopoverProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(state.elapsedSeconds);
 
   // Resync the local tick whenever the controller hands us a fresh
@@ -91,39 +95,62 @@ function Popover({ locale, state, onStart, onPause, onResume, onSwitch, onStop }
         <span className="popover__totalValue">{state.totalLabel}</span>
       </div>
 
-      <div className="popover__actions">
-        {state.timerStatus === "idle" && (
-          <button type="button" className="popover__action popover__action--primary" onClick={onStart}>
-            {t(locale, "popover.action.start")}
-          </button>
-        )}
-        {state.timerStatus === "running" && (
-          <>
-            <button type="button" className="popover__action" onClick={onPause}>
-              {t(locale, "popover.action.pause")}
+      {state.awayPrompt ? (
+        // S9: BUILD_SPEC 'shows "Away Xh Ym — add it back?" (keep /
+        // discard)'. Replaces the normal action row entirely rather than
+        // sitting alongside it: the engine is "paused" for the SAME reason
+        // whether the pause was manual or an away-gap auto-pause, so
+        // rendering the ordinary Resume/Switch/Stop buttons too would let a
+        // click on Resume create a brand-new segment out from under the
+        // pending prompt (`TimerEngine.reopenLastSegment`'s guard would
+        // then correctly refuse "Keep", but that is a worse experience
+        // than never offering the conflicting path in the first place).
+        <div className="popover__away" role="alert">
+          <p className="popover__awayMessage">{state.awayPrompt.message}</p>
+          <div className="popover__awayActions">
+            <button type="button" className="popover__action popover__action--primary" onClick={onAwayKeep}>
+              {t(locale, "away.prompt.keep")}
             </button>
-            <button type="button" className="popover__action" onClick={onSwitch}>
-              {t(locale, "popover.action.switch")}
+            <button type="button" className="popover__action" onClick={onAwayDiscard}>
+              {t(locale, "away.prompt.discard")}
             </button>
-            <button type="button" className="popover__action popover__action--danger" onClick={onStop}>
-              {t(locale, "popover.action.stop")}
+          </div>
+        </div>
+      ) : (
+        <div className="popover__actions">
+          {state.timerStatus === "idle" && (
+            <button type="button" className="popover__action popover__action--primary" onClick={onStart}>
+              {t(locale, "popover.action.start")}
             </button>
-          </>
-        )}
-        {state.timerStatus === "paused" && (
-          <>
-            <button type="button" className="popover__action popover__action--primary" onClick={onResume}>
-              {t(locale, "popover.action.resume")}
-            </button>
-            <button type="button" className="popover__action" onClick={onSwitch}>
-              {t(locale, "popover.action.switch")}
-            </button>
-            <button type="button" className="popover__action popover__action--danger" onClick={onStop}>
-              {t(locale, "popover.action.stop")}
-            </button>
-          </>
-        )}
-      </div>
+          )}
+          {state.timerStatus === "running" && (
+            <>
+              <button type="button" className="popover__action" onClick={onPause}>
+                {t(locale, "popover.action.pause")}
+              </button>
+              <button type="button" className="popover__action" onClick={onSwitch}>
+                {t(locale, "popover.action.switch")}
+              </button>
+              <button type="button" className="popover__action popover__action--danger" onClick={onStop}>
+                {t(locale, "popover.action.stop")}
+              </button>
+            </>
+          )}
+          {state.timerStatus === "paused" && (
+            <>
+              <button type="button" className="popover__action popover__action--primary" onClick={onResume}>
+                {t(locale, "popover.action.resume")}
+              </button>
+              <button type="button" className="popover__action" onClick={onSwitch}>
+                {t(locale, "popover.action.switch")}
+              </button>
+              <button type="button" className="popover__action popover__action--danger" onClick={onStop}>
+                {t(locale, "popover.action.stop")}
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </main>
   );
 }
