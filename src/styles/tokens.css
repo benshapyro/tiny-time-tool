@@ -1,0 +1,122 @@
+/*
+ * Design tokens — the only source of color/space/type values. Components
+ * consume these custom properties; no literal colors or spacing anywhere
+ * in component CSS (BUILD_SPEC advisory rule + Design principle 4).
+ *
+ * Light values live on :root. Dark values are layered in two ways so both
+ * an explicit in-app theme choice and OS-level dark mode work:
+ *   1. `[data-theme="dark"]` — explicit user choice (Settings, later slice).
+ *   2. `prefers-color-scheme: dark` — OS-sync default when no explicit
+ *      choice has been made (i.e. not overridden by `[data-theme="light"]`).
+ */
+
+:root {
+  /* Color: surfaces */
+  --color-surface: #ffffff;
+  --color-surface-raised: #f7f7f8;
+  --color-border: #e2e2e6;
+
+  /* Color: text */
+  --color-text-primary: #1a1a1e;
+  --color-text-secondary: #5c5c66;
+  --color-text-inverse: #ffffff;
+
+  /* Color: brand / accent */
+  --color-accent: #2f6fed;
+  --color-accent-hover: #1f5be0;
+
+  /* Color: state */
+  --color-state-running: #2f9e5c;
+  --color-state-paused: #d68a1f;
+  --color-state-idle: #8a8a94;
+  --color-danger: #d94f4f;
+
+  /* Focus ring (accessibility floor: WCAG AA visible focus) */
+  --color-focus-ring: #2f6fed;
+
+  /* Space (4px scale) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Type */
+  --font-family-base:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-base: 1.4;
+
+  /* Motion (Design principle 5: motion informs, never decorative) */
+  --motion-duration-fast: 150ms;
+  --motion-duration-base: 200ms;
+  --motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+}
+
+:root[data-theme="dark"] {
+  --color-surface: #1c1c1f;
+  --color-surface-raised: #2a2a2e;
+  --color-border: #38383e;
+
+  --color-text-primary: #f2f2f4;
+  --color-text-secondary: #a8a8b3;
+  --color-text-inverse: #1a1a1e;
+
+  --color-accent: #6d9bff;
+  --color-accent-hover: #85adff;
+
+  --color-state-running: #4cc984;
+  --color-state-paused: #f0ad4e;
+  --color-state-idle: #77777f;
+  --color-danger: #ef6b6b;
+
+  --color-focus-ring: #6d9bff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    --color-surface: #1c1c1f;
+    --color-surface-raised: #2a2a2e;
+    --color-border: #38383e;
+
+    --color-text-primary: #f2f2f4;
+    --color-text-secondary: #a8a8b3;
+    --color-text-inverse: #1a1a1e;
+
+    --color-accent: #6d9bff;
+    --color-accent-hover: #85adff;
+
+    --color-state-running: #4cc984;
+    --color-state-paused: #f0ad4e;
+    --color-state-idle: #77777f;
+    --color-danger: #ef6b6b;
+
+    --color-focus-ring: #6d9bff;
+  }
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
