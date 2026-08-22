@@ -10,4 +10,8 @@ export const es: Record<TranslationKey, string> = {
   "tray.tooltip.idle": "Tiny Time Tool — inactivo",
   "tray.tooltip.running": "Tiny Time Tool — en curso",
   "tray.tooltip.paused": "Tiny Time Tool — en pausa",
+  "shortcuts.warning.primaryFailed":
+    "No se pudo asignar el atajo de inicio/pausa/reanudar — es posible que otra app ya lo esté usando. Elige otro en Configuración.",
+  "shortcuts.warning.stopFailed":
+    "No se pudo asignar el atajo para detener — es posible que otra app ya lo esté usando. Elige otro en Configuración.",
 };

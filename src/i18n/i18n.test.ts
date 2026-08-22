@@ -58,6 +58,34 @@ describe("locale-aware display-time formatter (2026-08-22 amendment: AM/PM per l
   });
 });
 
+describe("shortcut registration-failure warnings (S3, both en and es required)", () => {
+  it("renders distinct, non-empty literals for the primary-shortcut warning in en and es", () => {
+    const enText = t("en", "shortcuts.warning.primaryFailed");
+    const esText = t("es", "shortcuts.warning.primaryFailed");
+    expect(enText.length).toBeGreaterThan(0);
+    expect(esText.length).toBeGreaterThan(0);
+    expect(enText).not.toBe(esText);
+  });
+
+  it("renders distinct, non-empty literals for the stop-shortcut warning in en and es", () => {
+    const enText = t("en", "shortcuts.warning.stopFailed");
+    const esText = t("es", "shortcuts.warning.stopFailed");
+    expect(enText.length).toBeGreaterThan(0);
+    expect(esText.length).toBeGreaterThan(0);
+    expect(enText).not.toBe(esText);
+  });
+
+  it("es strings are idiomatic, not literal translations (spec pins 'en curso', never 'rastreando' — same standard applies here: no 'atajo global' calque, no raw English left untranslated)", () => {
+    const esPrimary = t("es", "shortcuts.warning.primaryFailed");
+    const esStop = t("es", "shortcuts.warning.stopFailed");
+    for (const text of [esPrimary, esStop]) {
+      expect(text).not.toMatch(/rastreando/i);
+      expect(text).not.toMatch(/\bshortcut\b/i); // no leftover English noun
+      expect(text).toMatch(/atajo/i); // idiomatic Spanish term actually used
+    }
+  });
+});
+
 describe("fixed-format time formatter (reserved for exports — always 24-hour, locale-independent)", () => {
   it("is always 24-hour regardless of which locale display formatting would use", () => {
     expect(formatFixedTime(new Date(2026, 7, 21, 0, 5))).toBe("00:05");
